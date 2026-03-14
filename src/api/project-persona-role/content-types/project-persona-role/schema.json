@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_persona_roles",
+  "info": {
+    "singularName": "project-persona-role",
+    "pluralName": "project-persona-roles",
+    "displayName": "Project Persona Role"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "personaRoles",
+      "required": true
+    },
+    "functionalities": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::functionality.functionality",
+      "mappedBy": "personaRoles"
+    }
+  }
+}

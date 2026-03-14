@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_cases",
+  "info": {
+    "singularName": "test-case",
+    "pluralName": "test-cases",
+    "displayName": "Test Case"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "preconditions": {
+      "type": "text"
+    },
+    "testSteps": {
+      "type": "text"
+    },
+    "expectedResult": {
+      "type": "text"
+    },
+    "testType": {
+      "type": "enumeration",
+      "enum": ["integration", "functional", "sanity", "regression", "smoke", "exploratory", "uat"],
+      "default": "functional"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "testCases",
+      "required": true
+    },
+    "functionality": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::functionality.functionality",
+      "required": true
+    }
+  }
+}

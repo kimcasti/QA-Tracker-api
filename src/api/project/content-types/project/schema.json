@@ -1,0 +1,119 @@
+{
+  "kind": "collectionType",
+  "collectionName": "projects",
+  "info": {
+    "singularName": "project",
+    "pluralName": "projects",
+    "displayName": "Project"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "key": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "paused", "completed"],
+      "default": "active"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "logoDataUrl": {
+      "type": "text"
+    },
+    "teamMembers": {
+      "type": "json"
+    },
+    "purpose": {
+      "type": "text"
+    },
+    "coreRequirements": {
+      "type": "json"
+    },
+    "businessRules": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "inversedBy": "projects",
+      "required": true
+    },
+    "modules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-module.project-module",
+      "mappedBy": "project"
+    },
+    "personaRoles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-persona-role.project-persona-role",
+      "mappedBy": "project"
+    },
+    "sprints": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sprint.sprint",
+      "mappedBy": "project"
+    },
+    "functionalities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::functionality.functionality",
+      "mappedBy": "project"
+    },
+    "testCases": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-case.test-case",
+      "mappedBy": "project"
+    },
+    "testRuns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-run.test-run",
+      "mappedBy": "project"
+    },
+    "testPlans": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-plan.test-plan",
+      "mappedBy": "project"
+    },
+    "meetingNotes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::meeting-note.meeting-note",
+      "mappedBy": "project"
+    },
+    "testCycles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-cycle.test-cycle",
+      "mappedBy": "project"
+    },
+    "bugs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::bug.bug",
+      "mappedBy": "project"
+    }
+  }
+}

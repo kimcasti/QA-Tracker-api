@@ -1,0 +1,105 @@
+export const ACCESS_ROLE_CODES = ['qa-lead', 'qa-engineer', 'manager', 'viewer'] as const;
+
+export type AccessRoleCode = (typeof ACCESS_ROLE_CODES)[number];
+
+export const READ_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer', 'manager', 'viewer'];
+export const MANAGE_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer', 'manager'];
+export const ENGINEERING_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer'];
+export const ADMIN_ROLES: AccessRoleCode[] = ['qa-lead'];
+
+export const ACCESS_ROLE_SEEDS: Array<{
+  code: AccessRoleCode;
+  name: string;
+  description: string;
+}> = [
+  {
+    code: 'qa-lead',
+    name: 'QA Lead',
+    description: 'Full tenant administration and QA management permissions.',
+  },
+  {
+    code: 'qa-engineer',
+    name: 'QA Engineer',
+    description: 'Operational QA access for executions, cycles, bugs and test assets.',
+  },
+  {
+    code: 'manager',
+    name: 'Manager',
+    description: 'Read access plus limited planning and tracking updates.',
+  },
+  {
+    code: 'viewer',
+    name: 'Viewer',
+    description: 'Read-only access inside the organization workspace.',
+  },
+];
+
+export const EXPOSED_ACTIONS = [
+  'api::slack.slack.members',
+  'api::project.project.find',
+  'api::project.project.findOne',
+  'api::project.project.create',
+  'api::project.project.update',
+  'api::project.project.delete',
+  'api::project-module.project-module.find',
+  'api::project-module.project-module.findOne',
+  'api::project-module.project-module.create',
+  'api::project-module.project-module.update',
+  'api::project-module.project-module.delete',
+  'api::project-persona-role.project-persona-role.find',
+  'api::project-persona-role.project-persona-role.findOne',
+  'api::project-persona-role.project-persona-role.create',
+  'api::project-persona-role.project-persona-role.update',
+  'api::project-persona-role.project-persona-role.delete',
+  'api::sprint.sprint.find',
+  'api::sprint.sprint.findOne',
+  'api::sprint.sprint.create',
+  'api::sprint.sprint.update',
+  'api::sprint.sprint.delete',
+  'api::functionality.functionality.find',
+  'api::functionality.functionality.findOne',
+  'api::functionality.functionality.create',
+  'api::functionality.functionality.update',
+  'api::functionality.functionality.delete',
+  'api::test-case.test-case.find',
+  'api::test-case.test-case.findOne',
+  'api::test-case.test-case.create',
+  'api::test-case.test-case.update',
+  'api::test-case.test-case.delete',
+  'api::test-run.test-run.find',
+  'api::test-run.test-run.findOne',
+  'api::test-run.test-run.create',
+  'api::test-run.test-run.update',
+  'api::test-run.test-run.delete',
+  'api::test-plan.test-plan.find',
+  'api::test-plan.test-plan.findOne',
+  'api::test-plan.test-plan.create',
+  'api::test-plan.test-plan.update',
+  'api::test-plan.test-plan.delete',
+  'api::test-run-result.test-run-result.find',
+  'api::test-run-result.test-run-result.findOne',
+  'api::test-run-result.test-run-result.create',
+  'api::test-run-result.test-run-result.update',
+  'api::test-run-result.test-run-result.delete',
+  'api::test-cycle.test-cycle.find',
+  'api::test-cycle.test-cycle.findOne',
+  'api::test-cycle.test-cycle.create',
+  'api::test-cycle.test-cycle.update',
+  'api::test-cycle.test-cycle.delete',
+  'api::test-cycle-execution.test-cycle-execution.find',
+  'api::test-cycle-execution.test-cycle-execution.findOne',
+  'api::test-cycle-execution.test-cycle-execution.create',
+  'api::test-cycle-execution.test-cycle-execution.update',
+  'api::test-cycle-execution.test-cycle-execution.delete',
+  'api::bug.bug.find',
+  'api::bug.bug.findOne',
+  'api::bug.bug.create',
+  'api::bug.bug.update',
+  'api::bug.bug.delete',
+  'api::meeting-note.meeting-note.find',
+  'api::meeting-note.meeting-note.findOne',
+  'api::meeting-note.meeting-note.create',
+  'api::meeting-note.meeting-note.update',
+  'api::meeting-note.meeting-note.delete',
+  'api::me.me.workspace',
+] as const;

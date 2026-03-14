@@ -1,0 +1,65 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_plans",
+  "info": {
+    "singularName": "test-plan",
+    "pluralName": "test-plans",
+    "displayName": "Test Plan"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "scope": {
+      "type": "enumeration",
+      "enum": ["total", "partial"],
+      "default": "total"
+    },
+    "impactModules": {
+      "type": "json"
+    },
+    "date": {
+      "type": "date",
+      "required": true
+    },
+    "testType": {
+      "type": "enumeration",
+      "enum": ["integration", "functional", "sanity", "regression", "smoke", "exploratory", "uat"],
+      "default": "regression"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium"
+    },
+    "jiraId": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "testPlans",
+      "required": true
+    },
+    "sprint": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sprint.sprint",
+      "inversedBy": "testPlans"
+    }
+  }
+}

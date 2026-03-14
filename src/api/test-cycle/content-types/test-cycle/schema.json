@@ -1,0 +1,94 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_cycles",
+  "info": {
+    "singularName": "test-cycle",
+    "pluralName": "test-cycles",
+    "displayName": "Test Cycle"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "cycleType": {
+      "type": "enumeration",
+      "enum": ["regression", "smoke"],
+      "required": true
+    },
+    "date": {
+      "type": "date",
+      "required": true
+    },
+    "totalTests": {
+      "type": "integer",
+      "default": 0
+    },
+    "passed": {
+      "type": "integer",
+      "default": 0
+    },
+    "failed": {
+      "type": "integer",
+      "default": 0
+    },
+    "blocked": {
+      "type": "integer",
+      "default": 0
+    },
+    "pending": {
+      "type": "integer",
+      "default": 0
+    },
+    "passRate": {
+      "type": "decimal",
+      "default": 0
+    },
+    "note": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["completed", "in_progress"],
+      "default": "in_progress"
+    },
+    "tester": {
+      "type": "string"
+    },
+    "buildVersion": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "enumeration",
+      "enum": ["test", "local", "production"]
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "testCycles",
+      "required": true
+    },
+    "sprint": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sprint.sprint"
+    },
+    "executions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-cycle-execution.test-cycle-execution",
+      "mappedBy": "testCycle"
+    }
+  }
+}

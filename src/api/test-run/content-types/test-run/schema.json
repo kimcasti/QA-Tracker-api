@@ -1,0 +1,79 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_runs",
+  "info": {
+    "singularName": "test-run",
+    "pluralName": "test-runs",
+    "displayName": "Test Run"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "executionDate": {
+      "type": "date"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "final"],
+      "default": "draft"
+    },
+    "testType": {
+      "type": "enumeration",
+      "enum": ["integration", "functional", "sanity", "regression", "smoke", "exploratory", "uat"],
+      "default": "functional"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium"
+    },
+    "tester": {
+      "type": "string"
+    },
+    "buildVersion": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "enumeration",
+      "enum": ["test", "local", "production"]
+    },
+    "selectedModules": {
+      "type": "json"
+    },
+    "selectedFunctionalities": {
+      "type": "json"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "testRuns",
+      "required": true
+    },
+    "sprint": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sprint.sprint"
+    },
+    "results": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-run-result.test-run-result",
+      "mappedBy": "testRun"
+    }
+  }
+}

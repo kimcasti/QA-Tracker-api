@@ -1,0 +1,88 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_cycle_executions",
+  "info": {
+    "singularName": "test-cycle-execution",
+    "pluralName": "test-cycle-executions",
+    "displayName": "Test Cycle Execution"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "moduleName": {
+      "type": "string"
+    },
+    "functionalityName": {
+      "type": "string"
+    },
+    "testCaseTitle": {
+      "type": "string"
+    },
+    "executed": {
+      "type": "boolean",
+      "default": false
+    },
+    "date": {
+      "type": "date"
+    },
+    "result": {
+      "type": "enumeration",
+      "enum": ["passed", "failed", "blocked", "not_executed"],
+      "default": "not_executed"
+    },
+    "evidence": {
+      "type": "text"
+    },
+    "evidenceImage": {
+      "type": "text"
+    },
+    "bugTitle": {
+      "type": "string"
+    },
+    "bugLink": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "linkedBugId": {
+      "type": "string"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    },
+    "testCycle": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-cycle.test-cycle",
+      "inversedBy": "executions",
+      "required": true
+    },
+    "functionality": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::functionality.functionality"
+    },
+    "testCase": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-case.test-case"
+    },
+    "bug": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::bug.bug"
+    }
+  }
+}

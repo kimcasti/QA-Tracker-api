@@ -1,0 +1,44 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Strapi application",
+  "scripts": {
+    "build": "strapi build",
+    "console": "strapi console",
+    "deploy": "strapi deploy",
+    "dev": "strapi develop",
+    "develop": "strapi develop",
+    "import:legacy": "node --import tsx ./src/scripts/import-legacy.ts",
+    "start": "strapi start",
+    "strapi": "strapi",
+    "types:generate": "strapi ts:generate-types",
+    "upgrade": "npx @strapi/upgrade latest",
+    "upgrade:dry": "npx @strapi/upgrade latest --dry"
+  },
+  "dependencies": {
+    "@strapi/plugin-cloud": "5.39.0",
+    "@strapi/plugin-users-permissions": "5.39.0",
+    "@strapi/strapi": "5.39.0",
+    "mysql2": "3.9.8",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "strapi-plugin-schema-visualizer": "^1.0.5",
+    "styled-components": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20.0.0 <=24.x.x",
+    "npm": ">=6.0.0"
+  },
+  "strapi": {
+    "uuid": "4fd1ff91-ab33-4af2-8b04-3694f07da442",
+    "installId": "743733c32a31ae5dcb4c53c845efa7471ab6e69cdd366d54fb19faebf9442a43"
+  }
+}

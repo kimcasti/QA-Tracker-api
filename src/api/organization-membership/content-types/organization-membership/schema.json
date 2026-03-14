@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "organization_memberships",
+  "info": {
+    "singularName": "organization-membership",
+    "pluralName": "organization-memberships",
+    "displayName": "Organization Membership"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "inversedBy": "memberships",
+      "required": true
+    },
+    "organizationRole": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization-role.organization-role",
+      "inversedBy": "memberships",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    }
+  }
+}

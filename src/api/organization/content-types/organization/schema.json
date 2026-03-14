@@ -1,0 +1,64 @@
+{
+  "kind": "collectionType",
+  "collectionName": "organizations",
+  "info": {
+    "singularName": "organization",
+    "pluralName": "organizations",
+    "displayName": "Organization"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name",
+      "required": true,
+      "unique": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "inactive"],
+      "default": "active"
+    },
+    "plan": {
+      "type": "enumeration",
+      "enum": ["starter", "growth", "enterprise"],
+      "default": "starter"
+    },
+    "memberships": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::organization-membership.organization-membership",
+      "mappedBy": "organization"
+    },
+    "roles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::organization-role.organization-role",
+      "mappedBy": "organization"
+    },
+    "projects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project.project",
+      "mappedBy": "organization"
+    },
+    "testPlans": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-plan.test-plan",
+      "mappedBy": "organization"
+    },
+    "meetingNotes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::meeting-note.meeting-note",
+      "mappedBy": "organization"
+    }
+  }
+}

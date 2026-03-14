@@ -1,0 +1,106 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bugs",
+  "info": {
+    "singularName": "bug",
+    "pluralName": "bugs",
+    "displayName": "Bug"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "internalBugId": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "externalBugId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "severity": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "bugLink": {
+      "type": "string"
+    },
+    "evidenceImage": {
+      "type": "text"
+    },
+    "origin": {
+      "type": "enumeration",
+      "enum": ["general_execution", "regression_cycle", "smoke_cycle"],
+      "default": "general_execution"
+    },
+    "functionalityName": {
+      "type": "string"
+    },
+    "moduleName": {
+      "type": "string"
+    },
+    "detectedAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "reportedBy": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "in_progress", "qa", "resolved"],
+      "default": "pending"
+    },
+    "testCaseTitle": {
+      "type": "string"
+    },
+    "linkedSourceId": {
+      "type": "string"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "bugs",
+      "required": true
+    },
+    "functionality": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::functionality.functionality"
+    },
+    "sprint": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sprint.sprint"
+    },
+    "testCase": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-case.test-case"
+    },
+    "testRun": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-run.test-run"
+    },
+    "testCycle": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-cycle.test-cycle"
+    }
+  }
+}

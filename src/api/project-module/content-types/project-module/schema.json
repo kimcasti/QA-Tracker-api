@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_modules",
+  "info": {
+    "singularName": "project-module",
+    "pluralName": "project-modules",
+    "displayName": "Project Module"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "modules",
+      "required": true
+    },
+    "functionalities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::functionality.functionality",
+      "mappedBy": "module"
+    }
+  }
+}

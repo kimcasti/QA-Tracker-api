@@ -1,0 +1,85 @@
+{
+  "kind": "collectionType",
+  "collectionName": "functionalities",
+  "info": {
+    "singularName": "functionality",
+    "pluralName": "functionalities",
+    "displayName": "Functionality"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "testTypes": {
+      "type": "json"
+    },
+    "isRegression": {
+      "type": "boolean",
+      "default": false
+    },
+    "isSmoke": {
+      "type": "boolean",
+      "default": false
+    },
+    "deliveryDate": {
+      "type": "date"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["completed", "failed", "in_progress", "backlog", "mvp", "post_mvp"],
+      "default": "backlog"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium"
+    },
+    "riskLevel": {
+      "type": "enumeration",
+      "enum": ["high", "medium", "low"],
+      "default": "medium"
+    },
+    "storyLegacyId": {
+      "type": "string"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "functionalities",
+      "required": true
+    },
+    "module": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-module.project-module",
+      "inversedBy": "functionalities"
+    },
+    "personaRoles": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::project-persona-role.project-persona-role",
+      "inversedBy": "functionalities"
+    },
+    "sprint": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sprint.sprint"
+    }
+  }
+}

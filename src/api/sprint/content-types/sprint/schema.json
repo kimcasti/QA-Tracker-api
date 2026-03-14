@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sprints",
+  "info": {
+    "singularName": "sprint",
+    "pluralName": "sprints",
+    "displayName": "Sprint"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "startDate": {
+      "type": "date",
+      "required": true
+    },
+    "endDate": {
+      "type": "date",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["planned", "in_progress", "completed"],
+      "default": "planned"
+    },
+    "objective": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "sprints",
+      "required": true
+    },
+    "testPlans": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-plan.test-plan",
+      "mappedBy": "sprint"
+    }
+  }
+}

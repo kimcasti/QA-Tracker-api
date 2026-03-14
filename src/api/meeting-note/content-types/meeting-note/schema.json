@@ -1,0 +1,55 @@
+{
+  "kind": "collectionType",
+  "collectionName": "meeting_notes",
+  "info": {
+    "singularName": "meeting-note",
+    "pluralName": "meeting-notes",
+    "displayName": "Meeting Note"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "date": {
+      "type": "date",
+      "required": true
+    },
+    "time": {
+      "type": "time",
+      "required": true
+    },
+    "participants": {
+      "type": "text",
+      "required": true
+    },
+    "notes": {
+      "type": "text",
+      "required": true
+    },
+    "aiSummary": {
+      "type": "text"
+    },
+    "aiDecisions": {
+      "type": "text"
+    },
+    "aiActions": {
+      "type": "text"
+    },
+    "aiNextSteps": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "meetingNotes",
+      "required": true
+    }
+  }
+}
