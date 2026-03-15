@@ -196,6 +196,7 @@ async function ensureManageAccess(userId: number) {
 }
 
 async function sendInvitationEmail(input: {
+  invitationDocumentId: string;
   recipientEmail: string;
   organizationName: string;
   roleName: string;
@@ -204,6 +205,7 @@ async function sendInvitationEmail(input: {
   invitationStatus: 'new' | 'resent';
 }) {
   await sendOrganizationInvitationEmail({
+    invitationDocumentId: input.invitationDocumentId,
     recipientEmail: input.recipientEmail,
     organizationName: input.organizationName,
     roleName: input.roleName,
@@ -214,6 +216,48 @@ async function sendInvitationEmail(input: {
 }
 
 export default {
+  async publicInvitation(ctx) {
+    const invitationDocumentId = String(ctx.params.documentId || '').trim();
+
+    if (!invitationDocumentId) {
+      throw new errors.ValidationError('Invitation is required.');
+    }
+
+    const invitation = await strapi.documents(
+      'api::organization-invitation.organization-invitation' as any,
+    ).findOne({
+      documentId: invitationDocumentId,
+      populate: {
+        organization: true,
+        organizationRole: true,
+      },
+    });
+
+    if (!invitation?.documentId || !invitation.organization?.documentId) {
+      throw new errors.NotFoundError('Invitation not found.');
+    }
+
+    ctx.body = {
+      data: {
+        documentId: invitation.documentId,
+        email: invitation.email,
+        organization: {
+          documentId: invitation.organization.documentId,
+          name: invitation.organization.name,
+        },
+        role: invitation.organizationRole
+          ? {
+              documentId: invitation.organizationRole.documentId,
+              code: invitation.organizationRole.code,
+              name: invitation.organizationRole.name,
+            }
+          : null,
+        status: invitation.status,
+        invitedAt: invitation.invitedAt,
+      },
+    };
+  },
+
   async current(ctx) {
     const userId = ctx.state.user?.id;
 
@@ -310,6 +354,7 @@ export default {
 
     try {
       await sendInvitationEmail({
+        invitationDocumentId,
         recipientEmail: email,
         organizationName: teamContext.organizationName,
         roleName: roleRecord.name,
@@ -446,6 +491,7 @@ export default {
     }
 
     await sendInvitationEmail({
+      invitationDocumentId,
       recipientEmail: invitation.email,
       organizationName: invitation.organization?.name || teamContext.organizationName,
       roleName: invitation.organizationRole?.name || 'Viewer',

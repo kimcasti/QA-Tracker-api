@@ -1,5 +1,5 @@
 import type { Core } from '@strapi/strapi';
-import { ensureUserWorkspace } from './bootstrap';
+import { ensureUserWorkspace, linkMembershipForRole } from './bootstrap';
 
 type MembershipRecord = {
   documentId: string;
@@ -32,6 +32,60 @@ export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
 
   if (memberships.length > 0) {
     return memberships;
+  }
+
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+  });
+  const normalizedEmail = (user?.email || '').trim().toLowerCase();
+
+  if (normalizedEmail) {
+    const pendingInvitation = await strapi.documents(
+      'api::organization-invitation.organization-invitation' as any,
+    ).findFirst({
+      filters: {
+        email: normalizedEmail,
+        status: 'pending',
+      },
+      populate: {
+        organization: true,
+        organizationRole: true,
+      },
+      sort: ['invitedAt:desc'],
+    });
+
+    if (pendingInvitation?.organization?.documentId && pendingInvitation.organizationRole?.code) {
+      await linkMembershipForRole(
+        strapi,
+        pendingInvitation.organization.documentId,
+        userId,
+        pendingInvitation.organizationRole.code,
+      );
+
+      await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
+        documentId: pendingInvitation.documentId,
+        data: {
+          status: 'accepted',
+        },
+      });
+    }
+  }
+
+  const invitedMemberships = (await strapi
+    .documents('api::organization-membership.organization-membership')
+    .findMany({
+      filters: {
+        isActive: true,
+        user: { id: userId },
+      },
+      populate: {
+        organization: true,
+        organizationRole: true,
+      },
+    })) as unknown as MembershipRecord[];
+
+  if (invitedMemberships.length > 0) {
+    return invitedMemberships;
   }
 
   await ensureUserWorkspace(strapi, userId);

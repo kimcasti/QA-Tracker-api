@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 
 type InvitationEmailPayload = {
+  invitationDocumentId: string;
   recipientEmail: string;
   organizationName: string;
   roleName: string;
@@ -68,7 +69,10 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
     payload.invitationStatus === 'resent'
       ? 'Tu invitacion fue reenviada. Usa el mismo correo para completar el acceso.'
       : 'Has sido invitado a colaborar en una organizacion de QA Tracker.';
-  const ctaUrl = config.appUrl;
+  const ctaUrl = `${config.appUrl}?${new URLSearchParams({
+    invitation: payload.invitationDocumentId,
+    mode: 'signup',
+  }).toString()}`;
 
   return {
     from: config.from!,
@@ -80,7 +84,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
       `Rol sugerido: ${payload.roleName}`,
       inviterLine ? `Invitado por: ${inviterLine}` : '',
       '',
-      `Abre QA Tracker: ${ctaUrl}`,
+      `Acepta la invitacion en QA Tracker: ${ctaUrl}`,
       'Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.',
     ]
       .filter(Boolean)
@@ -98,7 +102,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
         }
         <p>
           <a href="${ctaUrl}" style="display:inline-block;background:#123F68;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;">
-            Abrir QA Tracker
+            Aceptar invitacion
           </a>
         </p>
         <p style="color:#5D748B;">

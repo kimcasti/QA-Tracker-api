@@ -60,3 +60,19 @@ Feel free to check out the [Strapi GitHub repository](https://github.com/strapi/
 
 <sub>🤫 Psst! [Strapi is hiring](https://strapi.io/careers).</sub>
 # QA-Tracker-api
+
+## Invitation emails
+
+To test organization invitations with real email delivery, configure these variables in `.env`:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=mailer@example.com
+SMTP_PASS=changeMeMailerPassword
+MAIL_FROM="QA Tracker <no-reply@example.com>"
+INVITATION_APP_URL=http://localhost:3000
+```
+
+When a pending invitation exists for an email, signing up with that same email will now join the invited organization automatically and mark the invitation as accepted.

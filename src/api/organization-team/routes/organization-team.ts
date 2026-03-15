@@ -2,6 +2,14 @@ export default {
   routes: [
     {
       method: 'GET',
+      path: '/organization-team/invitations/:documentId/public',
+      handler: 'organization-team.publicInvitation',
+      config: {
+        auth: false,
+      },
+    },
+    {
+      method: 'GET',
       path: '/organization-team',
       handler: 'organization-team.current',
       config: {
