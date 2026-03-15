@@ -81,7 +81,7 @@ export default factories.createCoreController('api::project.project', () => ({
       throw new errors.UnauthorizedError('Authentication is required.');
     }
 
-    const documentId = ctx.params.documentId;
+    const documentId = ctx.params.documentId || ctx.params.id;
     if (!documentId) {
       throw new errors.ValidationError('Project documentId is required.');
     }
