@@ -3,6 +3,7 @@ import { errors } from '@strapi/utils';
 import {
   bootstrapOrganizationRoles,
   generateUniqueOrganizationSlug,
+  linkMembershipForRole,
   linkInitialMembership,
 } from '../../../utils/bootstrap';
 
@@ -34,14 +35,29 @@ function sanitizeUser(user: { id: number; username?: string; email?: string }) {
   };
 }
 
+async function findPendingInvitation(email: string) {
+  return strapi.documents('api::organization-invitation.organization-invitation' as any).findFirst({
+    filters: {
+      email,
+      status: 'pending',
+    },
+    populate: {
+      organization: true,
+      organizationRole: true,
+    },
+    sort: ['invitedAt:desc'],
+  });
+}
+
 export default () => ({
   async signup(payload: SignupInput) {
     const username = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
     const password = (payload.password || '').trim();
     const organizationName = (payload.organizationName || '').trim();
+    const pendingInvitation = email ? await findPendingInvitation(email) : null;
 
-    if (!username || !email || !password || !organizationName) {
+    if (!username || !email || !password || (!organizationName && !pendingInvitation)) {
       throw new errors.ValidationError('Username, email, password and organization name are required.');
     }
 
@@ -70,6 +86,7 @@ export default () => ({
     }
 
     let createdUser: { id: number; username?: string; email?: string } | null = null;
+    let acceptedInvitationDocumentId: string | null = null;
 
     try {
       createdUser = await strapi.plugin('users-permissions').service('user').add({
@@ -82,32 +99,71 @@ export default () => ({
         role: authenticatedRole.id,
       });
 
-      const slug = await generateUniqueOrganizationSlug(strapi, organizationName);
-      const organization = await strapi.documents('api::organization.organization').create({
-        data: {
-          name: organizationName,
-          slug,
-          plan: 'starter',
-          status: 'active',
-        },
-      });
+      let organizationPayload: { documentId: string; name: string; slug: string } | null = null;
 
-      await bootstrapOrganizationRoles(strapi, organization.documentId);
-      await linkInitialMembership(strapi, organization.documentId, createdUser.id);
+      if (pendingInvitation?.organization?.documentId && pendingInvitation.organizationRole?.code) {
+        await linkMembershipForRole(
+          strapi,
+          pendingInvitation.organization.documentId,
+          createdUser.id,
+          pendingInvitation.organizationRole.code,
+        );
+
+        await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
+          documentId: pendingInvitation.documentId,
+          data: {
+            status: 'accepted',
+          },
+        });
+
+        acceptedInvitationDocumentId = pendingInvitation.documentId;
+        organizationPayload = {
+          documentId: pendingInvitation.organization.documentId,
+          name: pendingInvitation.organization.name,
+          slug: pendingInvitation.organization.slug,
+        };
+      } else {
+        const slug = await generateUniqueOrganizationSlug(strapi, organizationName);
+        const organization = await strapi.documents('api::organization.organization').create({
+          data: {
+            name: organizationName,
+            slug,
+            plan: 'starter',
+            status: 'active',
+          },
+        });
+
+        await bootstrapOrganizationRoles(strapi, organization.documentId);
+        await linkInitialMembership(strapi, organization.documentId, createdUser.id);
+
+        organizationPayload = {
+          documentId: organization.documentId,
+          name: organization.name,
+          slug: organization.slug,
+        };
+      }
 
       const jwt = strapi.plugin('users-permissions').service('jwt').issue({ id: createdUser.id });
 
       return {
         jwt,
         user: sanitizeUser(createdUser),
-        organization: {
-          documentId: organization.documentId,
-          name: organization.name,
-          slug: organization.slug,
-        },
+        organization: organizationPayload,
       };
     } catch (error) {
+      if (acceptedInvitationDocumentId) {
+        await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
+          documentId: acceptedInvitationDocumentId,
+          data: {
+            status: 'pending',
+          },
+        });
+      }
+
       if (createdUser?.id) {
+        await strapi.db.query('api::organization-membership.organization-membership').deleteMany({
+          where: { user: createdUser.id },
+        });
         await strapi.db.query('plugin::users-permissions.user').delete({
           where: { id: createdUser.id },
         });

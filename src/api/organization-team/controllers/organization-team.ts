@@ -1,5 +1,6 @@
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES } from '../../../utils/access';
+import { sendOrganizationInvitationEmail } from '../../../utils/mail';
 import { getUserMemberships } from '../../../utils/tenant';
 
 const TEAM_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'viewer'] as const;
@@ -194,6 +195,24 @@ async function ensureManageAccess(userId: number) {
   return teamContext;
 }
 
+async function sendInvitationEmail(input: {
+  recipientEmail: string;
+  organizationName: string;
+  roleName: string;
+  inviterName?: string;
+  inviterEmail?: string;
+  invitationStatus: 'new' | 'resent';
+}) {
+  await sendOrganizationInvitationEmail({
+    recipientEmail: input.recipientEmail,
+    organizationName: input.organizationName,
+    roleName: input.roleName,
+    inviterName: input.inviterName,
+    inviterEmail: input.inviterEmail,
+    invitationStatus: input.invitationStatus,
+  });
+}
+
 export default {
   async current(ctx) {
     const userId = ctx.state.user?.id;
@@ -287,6 +306,25 @@ export default {
     const invitationDocumentId = created?.documentId;
     if (!invitationDocumentId) {
       throw new errors.ApplicationError('The invitation could not be created.');
+    }
+
+    try {
+      await sendInvitationEmail({
+        recipientEmail: email,
+        organizationName: teamContext.organizationName,
+        roleName: roleRecord.name,
+        inviterEmail: ctx.state.user?.email,
+        inviterName: ctx.state.user?.username,
+        invitationStatus: 'new',
+      });
+    } catch (mailError) {
+      await strapi.documents('api::organization-invitation.organization-invitation' as any).delete({
+        documentId: invitationDocumentId,
+      });
+
+      throw new errors.ApplicationError(
+        mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
+      );
     }
 
     ctx.body = await buildTeamPayload(userId);
@@ -399,12 +437,22 @@ export default {
       documentId: invitationDocumentId,
       populate: {
         organization: true,
+        organizationRole: true,
       },
     });
 
     if (!invitation || invitation.organization?.documentId !== teamContext.organizationDocumentId) {
       throw new errors.NotFoundError('Invitation not found.');
     }
+
+    await sendInvitationEmail({
+      recipientEmail: invitation.email,
+      organizationName: invitation.organization?.name || teamContext.organizationName,
+      roleName: invitation.organizationRole?.name || 'Viewer',
+      inviterEmail: ctx.state.user?.email,
+      inviterName: ctx.state.user?.username,
+      invitationStatus: 'resent',
+    });
 
     await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
       documentId: invitationDocumentId,
