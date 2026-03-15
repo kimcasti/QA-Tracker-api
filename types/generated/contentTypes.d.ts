@@ -968,6 +968,7 @@ export interface ApiTestCaseTestCase extends Struct.CollectionTypeSchema {
       'api::functionality.functionality'
     > &
       Schema.Attribute.Required;
+    isAutomated: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

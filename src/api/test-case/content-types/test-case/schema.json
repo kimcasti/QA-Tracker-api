@@ -36,6 +36,10 @@
       "enum": ["critical", "high", "medium", "low"],
       "default": "medium"
     },
+    "isAutomated": {
+      "type": "boolean",
+      "default": false
+    },
     "organization": {
       "type": "relation",
       "relation": "manyToOne",

@@ -21,6 +21,7 @@ type TestCasePayload = {
     | 'exploratory'
     | 'uat';
   priority?: 'critical' | 'high' | 'medium' | 'low';
+  isAutomated?: boolean;
   organization?: unknown;
   project?: unknown;
   functionality?: unknown;
@@ -54,6 +55,7 @@ function buildTestCaseData(payload: TestCasePayload) {
     expectedResult: payload.expectedResult || '',
     testType: payload.testType || 'functional',
     priority: payload.priority || 'medium',
+    isAutomated: Boolean(payload.isAutomated),
   };
 }
 
