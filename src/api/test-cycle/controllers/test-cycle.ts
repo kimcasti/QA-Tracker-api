@@ -98,6 +98,22 @@ async function resolveOrganizationDocumentId(userId: number, payload: TestCycleP
   return requestedOrganizationDocumentId ?? allowedOrganizationDocumentIds[0];
 }
 
+async function findDuplicateCycle(
+  projectDocumentId: string,
+  code: string,
+  excludeDocumentId?: string,
+) {
+  const matches = await strapi.documents('api::test-cycle.test-cycle').findMany({
+    filters: {
+      code: { $eq: code },
+      project: { documentId: { $eq: projectDocumentId } },
+    } as any,
+    fields: ['documentId', 'code'],
+  });
+
+  return matches.find(item => item.documentId !== excludeDocumentId) || null;
+}
+
 export default factories.createCoreController('api::test-cycle.test-cycle', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -113,11 +129,23 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
       throw new errors.ValidationError('Test cycle project is required.');
     }
 
+    const cycleCode = payload.code?.trim();
+    if (!cycleCode) {
+      throw new errors.ValidationError('Test cycle code is required.');
+    }
+
+    const duplicateCycle = await findDuplicateCycle(projectDocumentId, cycleCode);
+    if (duplicateCycle) {
+      throw new errors.ValidationError(
+        `A test cycle with code "${cycleCode}" already exists in this project.`,
+      );
+    }
+
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
 
     const created = await strapi.documents('api::test-cycle.test-cycle').create({
       data: {
-        ...buildTestCycleData(payload),
+        ...buildTestCycleData({ ...payload, code: cycleCode }),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
@@ -166,6 +194,22 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
       throw new errors.ValidationError('Test cycle project is required.');
     }
 
+    const cycleCode = payload.code?.trim() || existing.code?.trim();
+    if (!cycleCode) {
+      throw new errors.ValidationError('Test cycle code is required.');
+    }
+
+    const duplicateCycle = await findDuplicateCycle(
+      projectDocumentId,
+      cycleCode,
+      existing.documentId,
+    );
+    if (duplicateCycle) {
+      throw new errors.ValidationError(
+        `A test cycle with code "${cycleCode}" already exists in this project.`,
+      );
+    }
+
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
@@ -175,7 +219,7 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
     const updated = await strapi.documents('api::test-cycle.test-cycle').update({
       documentId,
       data: {
-        ...buildTestCycleData(payload),
+        ...buildTestCycleData({ ...payload, code: cycleCode }),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,

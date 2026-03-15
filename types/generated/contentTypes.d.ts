@@ -1141,9 +1141,7 @@ export interface ApiTestCycleTestCycle extends Struct.CollectionTypeSchema {
   attributes: {
     blocked: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     buildVersion: Schema.Attribute.String;
-    code: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

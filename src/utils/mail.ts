@@ -68,7 +68,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
   const actionCopy =
     payload.invitationStatus === 'resent'
       ? 'Tu invitacion fue reenviada. Usa el mismo correo para completar el acceso.'
-      : 'Has sido invitado a colaborar en una organizacion de QA Tracker.';
+      : 'Has sido invitado a colaborar en una organización de QA Tracker.';
   const ctaUrl = `${config.appUrl}?${new URLSearchParams({
     invitation: payload.invitationDocumentId,
     mode: 'signup',
@@ -80,7 +80,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
     subject: `${subjectPrefix}: ${payload.organizationName}`,
     text: [
       actionCopy,
-      `Organizacion: ${payload.organizationName}`,
+      `Organización: ${payload.organizationName}`,
       `Rol sugerido: ${payload.roleName}`,
       inviterLine ? `Invitado por: ${inviterLine}` : '',
       '',
@@ -93,7 +93,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#102A43;">
         <h2 style="margin-bottom:8px;">${subjectPrefix}</h2>
         <p>${actionCopy}</p>
-        <p><strong>Organizacion:</strong> ${payload.organizationName}</p>
+        <p><strong>Organización:</strong> ${payload.organizationName}</p>
         <p><strong>Rol sugerido:</strong> ${payload.roleName}</p>
         ${
           inviterLine

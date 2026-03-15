@@ -462,6 +462,44 @@ export default {
     ctx.body = await buildTeamPayload(userId);
   },
 
+  async reactivateMember(ctx) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await ensureManageAccess(userId);
+    const membershipDocumentId = String(ctx.params.documentId || '').trim();
+
+    if (!membershipDocumentId) {
+      throw new errors.ValidationError('Membership is required.');
+    }
+
+    const membership = await strapi
+      .documents('api::organization-membership.organization-membership')
+      .findOne({
+        documentId: membershipDocumentId,
+        populate: {
+          organization: true,
+          user: true,
+        },
+      });
+
+    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
+      throw new errors.NotFoundError('Membership not found.');
+    }
+
+    await strapi.documents('api::organization-membership.organization-membership').update({
+      documentId: membershipDocumentId,
+      data: {
+        isActive: true,
+      },
+    });
+
+    ctx.body = await buildTeamPayload(userId);
+  },
+
   async resendInvitation(ctx) {
     const userId = ctx.state.user?.id;
 

@@ -41,6 +41,14 @@ export default {
       },
     },
     {
+      method: 'PUT',
+      path: '/organization-team/members/:documentId/reactivate',
+      handler: 'organization-team.reactivateMember',
+      config: {
+        auth: {},
+      },
+    },
+    {
       method: 'POST',
       path: '/organization-team/invitations/:documentId/resend',
       handler: 'organization-team.resendInvitation',

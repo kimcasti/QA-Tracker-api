@@ -110,8 +110,9 @@ export const EXPOSED_ACTIONS = [
   'api::me.me.updateOrganization',
   'api::organization-team.organization-team.current',
   'api::organization-team.organization-team.invite',
-  'api::organization-team.organization-team.update-member-role',
-  'api::organization-team.organization-team.deactivate-member',
-  'api::organization-team.organization-team.resend-invitation',
-  'api::organization-team.organization-team.cancel-invitation',
+  'api::organization-team.organization-team.updateMemberRole',
+  'api::organization-team.organization-team.deactivateMember',
+  'api::organization-team.organization-team.reactivateMember',
+  'api::organization-team.organization-team.resendInvitation',
+  'api::organization-team.organization-team.cancelInvitation',
 ] as const;
