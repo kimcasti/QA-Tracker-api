@@ -1,3 +1,7 @@
+import { errors } from '@strapi/utils';
+import { ADMIN_ROLES } from '../../../utils/access';
+import { getUserMemberships } from '../../../utils/tenant';
+
 export default () => ({
   async workspace(userId: number) {
     const memberships = await strapi
@@ -50,6 +54,38 @@ export default () => ({
         role: membership.organizationRole,
       })),
       projects,
+    };
+  },
+
+  async updateOrganization(userId: number, name: string) {
+    const normalizedName = (name || '').trim();
+
+    if (!normalizedName) {
+      throw new errors.ValidationError('Organization name is required.');
+    }
+
+    const memberships = await getUserMemberships(strapi, userId);
+    const activeMembership = memberships[0];
+
+    if (!activeMembership?.organization?.documentId) {
+      throw new errors.ForbiddenError('An active organization membership is required.');
+    }
+
+    if (!ADMIN_ROLES.includes((activeMembership.organizationRole?.code || '') as any)) {
+      throw new errors.ForbiddenError('Only Owner or QA Lead can edit the organization.');
+    }
+
+    const updated = await strapi.documents('api::organization.organization').update({
+      documentId: activeMembership.organization.documentId,
+      data: {
+        name: normalizedName,
+      },
+    });
+
+    return {
+      documentId: updated.documentId,
+      name: updated.name,
+      slug: updated.slug,
     };
   },
 });

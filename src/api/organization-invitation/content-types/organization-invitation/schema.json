@@ -1,0 +1,47 @@
+{
+  "kind": "collectionType",
+  "collectionName": "organization_invitations",
+  "info": {
+    "singularName": "organization-invitation",
+    "pluralName": "organization-invitations",
+    "displayName": "Organization Invitation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "invitedAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "accepted", "expired", "cancelled"],
+      "default": "pending",
+      "required": true
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "inversedBy": "invitations",
+      "required": true
+    },
+    "organizationRole": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization-role.organization-role",
+      "required": true
+    },
+    "invitedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    }
+  }
+}

@@ -1,17 +1,22 @@
-export const ACCESS_ROLE_CODES = ['qa-lead', 'qa-engineer', 'manager', 'viewer'] as const;
+export const ACCESS_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'manager', 'viewer'] as const;
 
 export type AccessRoleCode = (typeof ACCESS_ROLE_CODES)[number];
 
-export const READ_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer', 'manager', 'viewer'];
-export const MANAGE_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer', 'manager'];
-export const ENGINEERING_ROLES: AccessRoleCode[] = ['qa-lead', 'qa-engineer'];
-export const ADMIN_ROLES: AccessRoleCode[] = ['qa-lead'];
+export const READ_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer', 'manager', 'viewer'];
+export const MANAGE_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer', 'manager'];
+export const ENGINEERING_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer'];
+export const ADMIN_ROLES: AccessRoleCode[] = ['owner', 'qa-lead'];
 
 export const ACCESS_ROLE_SEEDS: Array<{
   code: AccessRoleCode;
   name: string;
   description: string;
 }> = [
+  {
+    code: 'owner',
+    name: 'Owner',
+    description: 'Organization owner with full administration access across the workspace.',
+  },
   {
     code: 'qa-lead',
     name: 'QA Lead',
@@ -102,4 +107,11 @@ export const EXPOSED_ACTIONS = [
   'api::meeting-note.meeting-note.update',
   'api::meeting-note.meeting-note.delete',
   'api::me.me.workspace',
+  'api::me.me.updateOrganization',
+  'api::organization-team.organization-team.current',
+  'api::organization-team.organization-team.invite',
+  'api::organization-team.organization-team.update-member-role',
+  'api::organization-team.organization-team.deactivate-member',
+  'api::organization-team.organization-team.resend-invitation',
+  'api::organization-team.organization-team.cancel-invitation',
 ] as const;

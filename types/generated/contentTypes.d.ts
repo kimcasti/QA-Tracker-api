@@ -605,6 +605,56 @@ export interface ApiMeetingNoteMeetingNote extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiOrganizationInvitationOrganizationInvitation
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'organization_invitations';
+  info: {
+    displayName: 'Organization Invitation';
+    pluralName: 'organization-invitations';
+    singularName: 'organization-invitation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    invitedAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    invitedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::organization-invitation.organization-invitation'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    organizationRole: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization-role.organization-role'
+    > &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'accepted', 'expired', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiOrganizationMembershipOrganizationMembership
   extends Struct.CollectionTypeSchema {
   collectionName: 'organization_memberships';
@@ -704,6 +754,10 @@ export interface ApiOrganizationOrganization
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    invitations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::organization-invitation.organization-invitation'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -1826,6 +1880,7 @@ declare module '@strapi/strapi' {
       'api::bug.bug': ApiBugBug;
       'api::functionality.functionality': ApiFunctionalityFunctionality;
       'api::meeting-note.meeting-note': ApiMeetingNoteMeetingNote;
+      'api::organization-invitation.organization-invitation': ApiOrganizationInvitationOrganizationInvitation;
       'api::organization-membership.organization-membership': ApiOrganizationMembershipOrganizationMembership;
       'api::organization-role.organization-role': ApiOrganizationRoleOrganizationRole;
       'api::organization.organization': ApiOrganizationOrganization;

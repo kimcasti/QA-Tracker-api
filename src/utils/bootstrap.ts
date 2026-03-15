@@ -214,6 +214,13 @@ export async function linkInitialMembership(
   organizationDocumentId: string,
   userId: number
 ) {
+  const ownerRole = await strapi.documents('api::organization-role.organization-role').findFirst({
+    filters: {
+      code: 'owner',
+      organization: { documentId: organizationDocumentId },
+    },
+  });
+
   const qaLeadRole = await strapi.documents('api::organization-role.organization-role').findFirst({
     filters: {
       code: 'qa-lead',
@@ -221,8 +228,30 @@ export async function linkInitialMembership(
     },
   });
 
-  if (!qaLeadRole) {
-    throw new Error('QA Lead access role was not created before linking the initial membership.');
+  const bootstrapRole = ownerRole || qaLeadRole;
+
+  if (!bootstrapRole) {
+    throw new Error('An admin access role was not created before linking the initial membership.');
+  }
+
+  return linkMembershipForRole(strapi, organizationDocumentId, userId, bootstrapRole.code);
+}
+
+export async function linkMembershipForRole(
+  strapi: Core.Strapi,
+  organizationDocumentId: string,
+  userId: number,
+  roleCode: string
+) {
+  const targetRole = await strapi.documents('api::organization-role.organization-role').findFirst({
+    filters: {
+      code: roleCode,
+      organization: { documentId: organizationDocumentId },
+    },
+  });
+
+  if (!targetRole) {
+    throw new Error(`Organization role ${roleCode} was not found before linking membership.`);
   }
 
   const existing = await strapi.documents('api::organization-membership.organization-membership').findFirst({
@@ -241,7 +270,7 @@ export async function linkInitialMembership(
   });
 
   const organizationRole = await strapi.db.query('api::organization-role.organization-role').findOne({
-    where: { documentId: qaLeadRole.documentId },
+    where: { documentId: targetRole.documentId },
   });
 
   if (!organization?.id || !organizationRole?.id) {

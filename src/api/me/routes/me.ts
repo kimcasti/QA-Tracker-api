@@ -9,5 +9,14 @@ export default {
         policies: ['global::has-active-membership'],
       },
     },
+    {
+      method: 'PUT',
+      path: '/me/organization',
+      handler: 'me.updateOrganization',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
   ],
 };

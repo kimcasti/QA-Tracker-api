@@ -42,6 +42,12 @@
       "target": "api::organization-role.organization-role",
       "mappedBy": "organization"
     },
+    "invitations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::organization-invitation.organization-invitation",
+      "mappedBy": "organization"
+    },
     "projects": {
       "type": "relation",
       "relation": "oneToMany",

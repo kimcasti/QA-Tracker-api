@@ -39,10 +39,10 @@ export default () => ({
     const username = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
     const password = (payload.password || '').trim();
-    const organizationName = (payload.organizationName || `${username} Workspace`).trim();
+    const organizationName = (payload.organizationName || '').trim();
 
-    if (!username || !email || !password) {
-      throw new errors.ValidationError('Username, email and password are required.');
+    if (!username || !email || !password || !organizationName) {
+      throw new errors.ValidationError('Username, email, password and organization name are required.');
     }
 
     if (password.length < 6) {
