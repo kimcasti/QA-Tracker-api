@@ -105,6 +105,22 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
   return data;
 }
 
+async function findDuplicateFunctionality(
+  projectDocumentId: string,
+  code: string,
+  excludeDocumentId?: string,
+) {
+  const matches = await strapi.documents('api::functionality.functionality').findMany({
+    filters: {
+      code: { $eq: code },
+      project: { documentId: { $eq: projectDocumentId } },
+    } as any,
+    fields: ['documentId', 'code'],
+  });
+
+  return matches.find(item => item.documentId !== excludeDocumentId) || null;
+}
+
 async function resolveOrganizationDocumentId(userId: number, payload: FunctionalityPayload) {
   const memberships = await getUserMemberships(strapi, userId);
   const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
@@ -144,11 +160,26 @@ export default factories.createCoreController('api::functionality.functionality'
       throw new errors.ValidationError('Functionality project is required.');
     }
 
+    const functionalityCode = payload.code?.trim();
+    if (!functionalityCode) {
+      throw new errors.ValidationError('Functionality code is required.');
+    }
+
+    const duplicateFunctionality = await findDuplicateFunctionality(
+      projectDocumentId,
+      functionalityCode,
+    );
+    if (duplicateFunctionality) {
+      throw new errors.ValidationError(
+        `A functionality with code "${functionalityCode}" already exists in this project.`,
+      );
+    }
+
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
 
     const created = await strapi.documents('api::functionality.functionality').create({
       data: {
-        ...buildFunctionalityData(payload),
+        ...buildFunctionalityData({ ...payload, code: functionalityCode }),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
@@ -199,6 +230,22 @@ export default factories.createCoreController('api::functionality.functionality'
       throw new errors.ValidationError('Functionality project is required.');
     }
 
+    const functionalityCode = payload.code?.trim() || existing.code?.trim();
+    if (!functionalityCode) {
+      throw new errors.ValidationError('Functionality code is required.');
+    }
+
+    const duplicateFunctionality = await findDuplicateFunctionality(
+      projectDocumentId,
+      functionalityCode,
+      existing.documentId,
+    );
+    if (duplicateFunctionality) {
+      throw new errors.ValidationError(
+        `A functionality with code "${functionalityCode}" already exists in this project.`,
+      );
+    }
+
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
@@ -208,7 +255,7 @@ export default factories.createCoreController('api::functionality.functionality'
     const updated = await strapi.documents('api::functionality.functionality').update({
       documentId,
       data: {
-        ...buildFunctionalityData(payload),
+        ...buildFunctionalityData({ ...payload, code: functionalityCode }),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,

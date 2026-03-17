@@ -12,8 +12,7 @@
   "attributes": {
     "code": {
       "type": "string",
-      "required": true,
-      "unique": true
+      "required": true
     },
     "name": {
       "type": "string",

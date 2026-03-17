@@ -512,9 +512,7 @@ export interface ApiFunctionalityFunctionality
     draftAndPublish: false;
   };
   attributes: {
-    code: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -790,6 +788,47 @@ export interface ApiOrganizationOrganization
       'oneToMany',
       'api::test-plan.test-plan'
     >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiPersonalNotePersonalNote
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'personal_notes';
+  info: {
+    displayName: 'Personal Note';
+    pluralName: 'personal-notes';
+    singularName: 'personal-note';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    activityDate: Schema.Attribute.Date & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::personal-note.personal-note'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1882,6 +1921,7 @@ declare module '@strapi/strapi' {
       'api::organization-membership.organization-membership': ApiOrganizationMembershipOrganizationMembership;
       'api::organization-role.organization-role': ApiOrganizationRoleOrganizationRole;
       'api::organization.organization': ApiOrganizationOrganization;
+      'api::personal-note.personal-note': ApiPersonalNotePersonalNote;
       'api::project-module.project-module': ApiProjectModuleProjectModule;
       'api::project-persona-role.project-persona-role': ApiProjectPersonaRoleProjectPersonaRole;
       'api::project.project': ApiProjectProject;

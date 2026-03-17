@@ -1,5 +1,5 @@
 import { factories } from '@strapi/strapi';
-import { ENGINEERING_ROLES, READ_ROLES } from '../../../utils/access';
+import { ADMIN_ROLES, ENGINEERING_ROLES, READ_ROLES } from '../../../utils/access';
 
 export default factories.createCoreRouter('api::test-run.test-run', {
   config: {
@@ -47,7 +47,7 @@ export default factories.createCoreRouter('api::test-run.test-run', {
           name: 'global::tenant-access',
           config: {
             contentTypeUid: 'api::test-run.test-run',
-            allowedRoles: ENGINEERING_ROLES,
+            allowedRoles: ADMIN_ROLES,
           },
         },
       ],

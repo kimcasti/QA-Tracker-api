@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "personal_notes",
+  "info": {
+    "singularName": "personal-note",
+    "pluralName": "personal-notes",
+    "displayName": "Personal Note"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "activityDate": {
+      "type": "date",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text",
+      "required": true
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    }
+  }
+}
