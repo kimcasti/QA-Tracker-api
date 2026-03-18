@@ -10,8 +10,10 @@ type FunctionalityPayload = {
   code?: string;
   name?: string;
   testTypes?: unknown;
+  isCore?: boolean;
   isRegression?: boolean;
   isSmoke?: boolean;
+  lastFunctionalChangeAt?: string | null;
   deliveryDate?: string | null;
   status?: 'completed' | 'failed' | 'in_progress' | 'backlog' | 'mvp' | 'post_mvp';
   priority?: 'critical' | 'high' | 'medium' | 'low';
@@ -81,8 +83,10 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
     code: payload.code || '',
     name: payload.name || '',
     testTypes: Array.isArray(payload.testTypes) ? payload.testTypes : [],
+    isCore: Boolean(payload.isCore),
     isRegression: Boolean(payload.isRegression),
     isSmoke: Boolean(payload.isSmoke),
+    lastFunctionalChangeAt: payload.lastFunctionalChangeAt || null,
     deliveryDate: payload.deliveryDate || null,
     status: payload.status || 'backlog',
     priority: payload.priority || 'medium',

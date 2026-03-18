@@ -517,8 +517,10 @@ export interface ApiFunctionalityFunctionality
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     deliveryDate: Schema.Attribute.Date;
+    isCore: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isRegression: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isSmoke: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    lastFunctionalChangeAt: Schema.Attribute.Date;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

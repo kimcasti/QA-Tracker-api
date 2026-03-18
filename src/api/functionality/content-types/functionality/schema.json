@@ -29,6 +29,13 @@
       "type": "boolean",
       "default": false
     },
+    "isCore": {
+      "type": "boolean",
+      "default": false
+    },
+    "lastFunctionalChangeAt": {
+      "type": "date"
+    },
     "deliveryDate": {
       "type": "date"
     },

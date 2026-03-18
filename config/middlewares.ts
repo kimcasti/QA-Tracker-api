@@ -15,7 +15,14 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
   },
   'strapi::poweredBy',
   'strapi::query',
-  'strapi::body',
+  {
+    name: 'strapi::body',
+    config: {
+      formLimit: '5mb',
+      jsonLimit: '5mb',
+      textLimit: '5mb',
+    },
+  },
   'strapi::session',
   'strapi::favicon',
   'strapi::public',
