@@ -1125,6 +1125,8 @@ export interface ApiTestCycleExecutionTestCycleExecution
     evidence: Schema.Attribute.Text;
     evidenceImage: Schema.Attribute.Text;
     executed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    executionMode: Schema.Attribute.Enumeration<['manual', 'automated']> &
+      Schema.Attribute.DefaultTo<'manual'>;
     functionality: Schema.Attribute.Relation<
       'manyToOne',
       'api::functionality.functionality'
