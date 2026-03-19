@@ -31,6 +31,11 @@
       "enum": ["passed", "failed", "blocked", "not_executed"],
       "default": "not_executed"
     },
+    "executionMode": {
+      "type": "enumeration",
+      "enum": ["manual", "automated"],
+      "default": "manual"
+    },
     "evidence": {
       "type": "text"
     },

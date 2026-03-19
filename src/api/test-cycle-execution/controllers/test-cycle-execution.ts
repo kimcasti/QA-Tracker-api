@@ -13,6 +13,7 @@ type TestCycleExecutionPayload = {
   executed?: boolean;
   date?: string | null;
   result?: 'passed' | 'failed' | 'blocked' | 'not_executed';
+  executionMode?: 'manual' | 'automated' | null;
   evidence?: string | null;
   evidenceImage?: string | null;
   bugTitle?: string | null;
@@ -124,6 +125,7 @@ function buildTestCycleExecutionData(
     executed: Boolean(payload.executed),
     date: payload.date || null,
     result: payload.result || 'not_executed',
+    executionMode: payload.executionMode || 'manual',
     evidence: payload.evidence || null,
     evidenceImage: payload.evidenceImage || null,
     bugTitle: payload.bugTitle || null,
