@@ -14,6 +14,8 @@ type ProjectPayload = {
   purpose?: string;
   coreRequirements?: unknown;
   businessRules?: string;
+  aiProjectInsights?: string;
+  aiWireframeBrief?: string;
   organization?: string;
 };
 
@@ -30,6 +32,8 @@ function normalizeProjectData(payload: ProjectPayload) {
     purpose: payload.purpose || '',
     coreRequirements: Array.isArray(payload.coreRequirements) ? payload.coreRequirements : [],
     businessRules: payload.businessRules || '',
+    aiProjectInsights: payload.aiProjectInsights || '',
+    aiWireframeBrief: payload.aiWireframeBrief || '',
   };
 }
 

@@ -48,6 +48,12 @@
     "businessRules": {
       "type": "text"
     },
+    "aiProjectInsights": {
+      "type": "text"
+    },
+    "aiWireframeBrief": {
+      "type": "text"
+    },
     "organization": {
       "type": "relation",
       "relation": "manyToOne",

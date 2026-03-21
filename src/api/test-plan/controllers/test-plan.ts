@@ -7,6 +7,13 @@ import {
 } from '../../../utils/tenant';
 
 type TestPlanPayload = {
+  eventType?:
+    | 'test'
+    | 'client_meeting'
+    | 'demo'
+    | 'onboarding'
+    | 'follow_up'
+    | 'reminder';
   title?: string;
   scope?: 'total' | 'partial';
   impactModules?: unknown;
@@ -22,6 +29,9 @@ type TestPlanPayload = {
   priority?: 'critical' | 'high' | 'medium' | 'low';
   jiraId?: string | null;
   description?: string;
+  time?: string | null;
+  attendees?: string | null;
+  owner?: string | null;
   organization?: unknown;
   project?: unknown;
   sprint?: unknown;
@@ -47,15 +57,22 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
 }
 
 function normalizeTestPlanData(payload: TestPlanPayload) {
+  const eventType = payload.eventType || 'test';
+  const isTestEvent = eventType === 'test';
+
   return {
+    eventType,
     title: payload.title || '',
-    scope: payload.scope || 'total',
-    impactModules: Array.isArray(payload.impactModules) ? payload.impactModules : [],
+    scope: isTestEvent ? payload.scope || 'total' : null,
+    impactModules: isTestEvent && Array.isArray(payload.impactModules) ? payload.impactModules : [],
     date: payload.date || '',
-    testType: payload.testType || 'regression',
-    priority: payload.priority || 'medium',
-    jiraId: payload.jiraId || null,
+    testType: isTestEvent ? payload.testType || 'regression' : null,
+    priority: isTestEvent ? payload.priority || 'medium' : null,
+    jiraId: isTestEvent ? payload.jiraId || null : null,
     description: payload.description || '',
+    time: payload.time || null,
+    attendees: payload.attendees || null,
+    owner: payload.owner || null,
   };
 }
 
@@ -99,6 +116,7 @@ export default factories.createCoreController('api::test-plan.test-plan', () => 
     }
 
     const sprintDocumentId = extractRelationDocumentId(payload.sprint);
+    const isTestEvent = (payload.eventType || 'test') === 'test';
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
 
     const created = await strapi.documents('api::test-plan.test-plan').create({
@@ -106,7 +124,7 @@ export default factories.createCoreController('api::test-plan.test-plan', () => 
         ...normalizeTestPlanData(payload),
         organization: organizationDocumentId,
         project: projectDocumentId,
-        sprint: sprintDocumentId,
+        sprint: isTestEvent ? sprintDocumentId : null,
       },
       populate: {
         organization: true,
@@ -151,8 +169,11 @@ export default factories.createCoreController('api::test-plan.test-plan', () => 
       throw new errors.ValidationError('Test plan project is required.');
     }
 
-    const sprintDocumentId =
-      extractRelationDocumentId(payload.sprint) ?? existing.sprint?.documentId ?? null;
+    const nextEventType = payload.eventType ?? (existing as any).eventType ?? 'test';
+    const isTestEvent = nextEventType === 'test';
+    const sprintDocumentId = isTestEvent
+      ? extractRelationDocumentId(payload.sprint) ?? existing.sprint?.documentId ?? null
+      : null;
 
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
       ...payload,

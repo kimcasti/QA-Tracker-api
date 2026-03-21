@@ -7,6 +7,7 @@ import {
 } from '../../../utils/tenant';
 
 type MeetingNotePayload = {
+  title?: string;
   date?: string;
   time?: string;
   participants?: string;
@@ -40,6 +41,7 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
 
 function normalizeMeetingNoteData(payload: MeetingNotePayload) {
   return {
+    title: payload.title || '',
     date: payload.date || '',
     time: payload.time || '',
     participants: payload.participants || '',

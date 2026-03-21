@@ -14,6 +14,11 @@
       "type": "string",
       "required": true
     },
+    "eventType": {
+      "type": "enumeration",
+      "enum": ["test", "client_meeting", "demo", "onboarding", "follow_up", "reminder"],
+      "default": "test"
+    },
     "scope": {
       "type": "enumeration",
       "enum": ["total", "partial"],
@@ -41,6 +46,15 @@
     },
     "description": {
       "type": "text"
+    },
+    "time": {
+      "type": "string"
+    },
+    "attendees": {
+      "type": "text"
+    },
+    "owner": {
+      "type": "string"
     },
     "organization": {
       "type": "relation",
