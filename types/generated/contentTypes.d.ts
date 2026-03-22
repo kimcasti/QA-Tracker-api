@@ -920,6 +920,42 @@ export interface ApiProjectPersonaRoleProjectPersonaRole
   };
 }
 
+export interface ApiProjectStoryMapProjectStoryMap
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_story_maps';
+  info: {
+    displayName: 'Project Story Map';
+    pluralName: 'project-story-maps';
+    singularName: 'project-story-map';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-story-map.project-story-map'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    snapshot: Schema.Attribute.Text & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiProjectProject extends Struct.CollectionTypeSchema {
   collectionName: 'projects';
   info: {
@@ -1938,6 +1974,7 @@ declare module '@strapi/strapi' {
       'api::personal-note.personal-note': ApiPersonalNotePersonalNote;
       'api::project-module.project-module': ApiProjectModuleProjectModule;
       'api::project-persona-role.project-persona-role': ApiProjectPersonaRoleProjectPersonaRole;
+      'api::project-story-map.project-story-map': ApiProjectStoryMapProjectStoryMap;
       'api::project.project': ApiProjectProject;
       'api::sprint.sprint': ApiSprintSprint;
       'api::test-case.test-case': ApiTestCaseTestCase;

@@ -1,5 +1,5 @@
 import { errors } from '@strapi/utils';
-import { ADMIN_ROLES } from '../../../utils/access';
+import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
 import { sendOrganizationInvitationEmail } from '../../../utils/mail';
 import { getUserMemberships } from '../../../utils/tenant';
 
@@ -195,6 +195,16 @@ async function ensureManageAccess(userId: number) {
   return teamContext;
 }
 
+async function ensureOwnerAccess(userId: number) {
+  const teamContext = await getActiveTeamContext(userId);
+
+  if (!OWNER_ROLES.includes(teamContext.currentRoleCode as any)) {
+    throw new errors.ForbiddenError('Only Owner can invite, change roles or deactivate access.');
+  }
+
+  return teamContext;
+}
+
 async function sendInvitationEmail(input: {
   invitationDocumentId: string;
   recipientEmail: string;
@@ -275,7 +285,7 @@ export default {
       throw new errors.UnauthorizedError('Authentication is required.');
     }
 
-    const teamContext = await ensureManageAccess(userId);
+    const teamContext = await ensureOwnerAccess(userId);
     const payload = ctx.request.body?.data || {};
     const email = normalizeEmail(payload.email);
     const roleDocumentId = String(payload.roleDocumentId || '').trim();
@@ -382,7 +392,7 @@ export default {
       throw new errors.UnauthorizedError('Authentication is required.');
     }
 
-    const teamContext = await ensureManageAccess(userId);
+    const teamContext = await ensureOwnerAccess(userId);
     const membershipDocumentId = String(ctx.params.documentId || '').trim();
     const roleDocumentId = String(ctx.request.body?.data?.roleDocumentId || '').trim();
 
@@ -427,7 +437,7 @@ export default {
       throw new errors.UnauthorizedError('Authentication is required.');
     }
 
-    const teamContext = await ensureManageAccess(userId);
+    const teamContext = await ensureOwnerAccess(userId);
     const membershipDocumentId = String(ctx.params.documentId || '').trim();
 
     if (!membershipDocumentId) {

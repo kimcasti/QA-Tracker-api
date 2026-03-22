@@ -5,6 +5,7 @@ export type AccessRoleCode = (typeof ACCESS_ROLE_CODES)[number];
 export const READ_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer', 'manager', 'viewer'];
 export const MANAGE_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer', 'manager'];
 export const ENGINEERING_ROLES: AccessRoleCode[] = ['owner', 'qa-lead', 'qa-engineer'];
+export const OWNER_ROLES: AccessRoleCode[] = ['owner'];
 export const ADMIN_ROLES: AccessRoleCode[] = ['owner', 'qa-lead'];
 
 export const ACCESS_ROLE_SEEDS: Array<{
@@ -46,6 +47,13 @@ export const EXPOSED_ACTIONS = [
   'api::project.project.create',
   'api::project.project.update',
   'api::project.project.delete',
+  'api::project.project.storyMap',
+  'api::project.project.upsertStoryMap',
+  'api::project-story-map.project-story-map.find',
+  'api::project-story-map.project-story-map.findOne',
+  'api::project-story-map.project-story-map.create',
+  'api::project-story-map.project-story-map.update',
+  'api::project-story-map.project-story-map.delete',
   'api::project-module.project-module.find',
   'api::project-module.project-module.findOne',
   'api::project-module.project-module.create',

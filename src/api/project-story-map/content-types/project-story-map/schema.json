@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_story_maps",
+  "info": {
+    "singularName": "project-story-map",
+    "pluralName": "project-story-maps",
+    "displayName": "Project Story Map"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "snapshot": {
+      "type": "text",
+      "required": true
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    }
+  }
+}

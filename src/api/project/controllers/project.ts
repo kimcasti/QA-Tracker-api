@@ -37,6 +37,37 @@ function normalizeProjectData(payload: ProjectPayload) {
   };
 }
 
+async function ensureProjectAccess(userId: number, projectDocumentId: string) {
+  const memberships = await getUserMemberships(strapi, userId);
+  const allowedOrganizationDocumentIds = memberships
+    .map(membership => membership.organization?.documentId)
+    .filter((value): value is string => Boolean(value));
+
+  if (allowedOrganizationDocumentIds.length === 0) {
+    throw new errors.ForbiddenError('An active organization membership is required.');
+  }
+
+  const project = await strapi.documents('api::project.project').findOne({
+    documentId: projectDocumentId,
+    populate: {
+      organization: true,
+    },
+  });
+
+  if (!project) {
+    throw new errors.NotFoundError('Project not found.');
+  }
+
+  if (
+    project.organization?.documentId &&
+    !allowedOrganizationDocumentIds.includes(project.organization.documentId)
+  ) {
+    throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+  }
+
+  return project;
+}
+
 async function resolveOrganizationDocumentId(userId: number, requestedOrganization?: string) {
   const memberships = await getUserMemberships(strapi, userId);
   const allowedOrganizationDocumentIds = memberships
@@ -119,5 +150,96 @@ export default factories.createCoreController('api::project.project', () => ({
     });
 
     ctx.body = { data: updated };
+  },
+
+  async storyMap(ctx) {
+    const userId = ctx.state.user?.id;
+    const projectDocumentId = ctx.params.documentId || ctx.params.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    if (!projectDocumentId) {
+      throw new errors.ValidationError('Project documentId is required.');
+    }
+
+    await ensureProjectAccess(userId, projectDocumentId);
+
+    const storyMap = await strapi.documents('api::project-story-map.project-story-map').findFirst({
+      filters: {
+        project: {
+          documentId: {
+            $eq: projectDocumentId,
+          },
+        },
+      },
+      populate: {
+        organization: true,
+        project: true,
+      },
+    });
+
+    ctx.body = { data: storyMap ?? null };
+  },
+
+  async upsertStoryMap(ctx) {
+    const userId = ctx.state.user?.id;
+    const projectDocumentId = ctx.params.documentId || ctx.params.id;
+    const snapshot = String(ctx.request.body?.data?.snapshot || '').trim();
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    if (!projectDocumentId) {
+      throw new errors.ValidationError('Project documentId is required.');
+    }
+
+    if (!snapshot) {
+      throw new errors.ValidationError('Story Map snapshot is required.');
+    }
+
+    const project = await ensureProjectAccess(userId, projectDocumentId);
+    const organizationDocumentId = project.organization?.documentId;
+
+    if (!organizationDocumentId) {
+      throw new errors.ValidationError('Project organization is required.');
+    }
+
+    const existing = await strapi.documents('api::project-story-map.project-story-map').findFirst({
+      filters: {
+        project: {
+          documentId: {
+            $eq: projectDocumentId,
+          },
+        },
+      },
+    });
+
+    const data = {
+      snapshot,
+      project: projectDocumentId,
+      organization: organizationDocumentId,
+    };
+
+    const saved = existing?.documentId
+      ? await strapi.documents('api::project-story-map.project-story-map').update({
+          documentId: existing.documentId,
+          data,
+          populate: {
+            organization: true,
+            project: true,
+          },
+        })
+      : await strapi.documents('api::project-story-map.project-story-map').create({
+          data,
+          populate: {
+            organization: true,
+            project: true,
+          },
+        });
+
+    ctx.body = { data: saved };
   },
 }));

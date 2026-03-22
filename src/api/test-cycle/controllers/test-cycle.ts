@@ -1,5 +1,6 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
+import { ADMIN_ROLES } from '../../../utils/access';
 import {
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
@@ -72,6 +73,69 @@ function buildTestCycleData(payload: TestCyclePayload) {
   }
 
   return data;
+}
+
+function normalizeComparableString(value?: string | null) {
+  return (value || '').trim() || null;
+}
+
+function normalizeComparableDate(value?: string | null) {
+  return normalizeComparableString(value);
+}
+
+function hasCycleConfigurationChanges(
+  payload: TestCyclePayload,
+  existing: any,
+  nextSprintDocumentId?: string | null,
+) {
+  const nextCode = normalizeComparableString(payload.code ?? existing.code);
+  const nextDate = normalizeComparableDate(payload.date ?? existing.date);
+  const nextNote = normalizeComparableString(payload.note ?? existing.note);
+  const nextTester = normalizeComparableString(payload.tester ?? existing.tester);
+  const nextBuildVersion = normalizeComparableString(
+    payload.buildVersion ?? existing.buildVersion,
+  );
+  const nextEnvironment = normalizeComparableString(
+    payload.environment ?? existing.environment,
+  );
+  const nextSprint = normalizeComparableString(
+    nextSprintDocumentId ?? existing.sprint?.documentId,
+  );
+
+  return (
+    nextCode !== normalizeComparableString(existing.code) ||
+    nextDate !== normalizeComparableDate(existing.date) ||
+    nextNote !== normalizeComparableString(existing.note) ||
+    nextTester !== normalizeComparableString(existing.tester) ||
+    nextBuildVersion !== normalizeComparableString(existing.buildVersion) ||
+    nextEnvironment !== normalizeComparableString(existing.environment) ||
+    nextSprint !== normalizeComparableString(existing.sprint?.documentId)
+  );
+}
+
+function isCycleReopen(payload: TestCyclePayload, existing: any) {
+  const nextStatus = payload.status ?? existing.status;
+  return existing.status === 'completed' && nextStatus === 'in_progress';
+}
+
+async function ensureCycleAdminAccess(
+  userId: number,
+  organizationDocumentId?: string | null,
+) {
+  if (!organizationDocumentId) {
+    throw new errors.ForbiddenError('An active organization membership is required.');
+  }
+
+  const memberships = await getUserMemberships(strapi, userId);
+  const membership = memberships.find(
+    item => item.organization?.documentId === organizationDocumentId,
+  );
+
+  if (!membership || !ADMIN_ROLES.includes((membership.organizationRole?.code || '') as any)) {
+    throw new errors.ForbiddenError(
+      'Only Owner or QA Lead can edit or reopen regression and smoke cycles.',
+    );
+  }
 }
 
 async function resolveOrganizationDocumentId(userId: number, payload: TestCyclePayload) {
@@ -189,6 +253,8 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
     const payload = (ctx.request.body?.data || {}) as TestCyclePayload;
     const projectDocumentId =
       extractRelationDocumentId(payload.project) ?? existing.project?.documentId ?? null;
+    const sprintDocumentId =
+      extractRelationDocumentId(payload.sprint) ?? existing.sprint?.documentId ?? null;
 
     if (!projectDocumentId) {
       throw new errors.ValidationError('Test cycle project is required.');
@@ -210,6 +276,13 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
       );
     }
 
+    if (
+      hasCycleConfigurationChanges(payload, existing, sprintDocumentId) ||
+      isCycleReopen(payload, existing)
+    ) {
+      await ensureCycleAdminAccess(userId, existing.organization?.documentId);
+    }
+
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
@@ -222,6 +295,7 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
         ...buildTestCycleData({ ...payload, code: cycleCode }),
         organization: organizationDocumentId,
         project: projectDocumentId,
+        sprint: sprintDocumentId,
       } as any,
       populate: {
         organization: true,
