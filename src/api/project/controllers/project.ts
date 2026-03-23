@@ -19,6 +19,23 @@ type ProjectPayload = {
   organization?: string;
 };
 
+function parseLogoDataUrl(value?: string | null) {
+  const match = String(value || '').match(/^data:(.+?);base64,(.+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return {
+      mimeType: match[1],
+      buffer: Buffer.from(match[2], 'base64'),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeProjectData(payload: ProjectPayload) {
   return {
     name: payload.name || '',
@@ -241,5 +258,31 @@ export default factories.createCoreController('api::project.project', () => ({
         });
 
     ctx.body = { data: saved };
+  },
+
+  async publicLogo(ctx) {
+    const projectDocumentId = ctx.params.documentId || ctx.params.id;
+
+    if (!projectDocumentId) {
+      throw new errors.ValidationError('Project documentId is required.');
+    }
+
+    const project = await strapi.documents('api::project.project').findOne({
+      documentId: projectDocumentId,
+    });
+
+    if (!project?.logoDataUrl) {
+      throw new errors.NotFoundError('Project logo not found.');
+    }
+
+    const parsedLogo = parseLogoDataUrl(project.logoDataUrl);
+
+    if (!parsedLogo) {
+      throw new errors.ValidationError('Project logo is not a valid image.');
+    }
+
+    ctx.set('Cache-Control', 'public, max-age=3600');
+    ctx.type = parsedLogo.mimeType;
+    ctx.body = parsedLogo.buffer;
   },
 }));

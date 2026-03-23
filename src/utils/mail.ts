@@ -5,6 +5,8 @@ type InvitationEmailPayload = {
   recipientEmail: string;
   organizationName: string;
   roleName: string;
+  workspaceName?: string;
+  workspaceLogoUrl?: string;
   inviterName?: string;
   inviterEmail?: string;
   invitationStatus?: 'new' | 'resent';
@@ -19,6 +21,10 @@ function parseBoolean(value?: string) {
   return ['1', 'true', 'yes', 'on'].includes((value || '').trim().toLowerCase());
 }
 
+function normalizeUrl(value?: string) {
+  return String(value || '').trim().replace(/\/$/, '');
+}
+
 function getMailConfig() {
   const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT || 587);
@@ -27,16 +33,16 @@ function getMailConfig() {
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.MAIL_FROM?.trim();
   const mailtrapApiToken = process.env.MAILTRAP_API_TOKEN?.trim();
-  const mailtrapApiUrl = (
-    process.env.MAILTRAP_API_URL ||
-    DEFAULT_MAILTRAP_API_URL
-  )
-    .trim()
-    .replace(/\/$/, '');
+  const mailtrapApiUrl = normalizeUrl(process.env.MAILTRAP_API_URL || DEFAULT_MAILTRAP_API_URL);
+  const publicApiUrl = normalizeUrl(process.env.PUBLIC_API_URL);
+  const brandLogoUrl = normalizeUrl(
+    process.env.MAIL_BRAND_LOGO_URL ||
+      (publicApiUrl ? `${publicApiUrl}/branding/qa-tracker-logo.png` : ''),
+  );
   const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || DEFAULT_SMTP_TIMEOUT_MS);
-  const appUrl = (process.env.INVITATION_APP_URL || process.env.APP_URL || 'http://localhost:3000')
-    .trim()
-    .replace(/\/$/, '');
+  const appUrl = normalizeUrl(
+    process.env.INVITATION_APP_URL || process.env.APP_URL || 'http://localhost:3000',
+  );
 
   return {
     host,
@@ -47,6 +53,8 @@ function getMailConfig() {
     from,
     mailtrapApiToken,
     mailtrapApiUrl,
+    publicApiUrl,
+    brandLogoUrl,
     timeoutMs,
     appUrl,
   };
@@ -56,6 +64,7 @@ function resetTransporter() {
   if (cachedTransporter) {
     cachedTransporter.close();
   }
+
   cachedTransporter = null;
 }
 
@@ -127,46 +136,167 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
   const actionCopy =
     payload.invitationStatus === 'resent'
       ? 'Tu invitacion fue reenviada. Usa el mismo correo para completar el acceso.'
-      : 'Has sido invitado a colaborar en una organización de QA Tracker.';
+      : 'Has sido invitado a colaborar en una organizacion de QA Tracker.';
+  const workspaceName = payload.workspaceName?.trim();
+  const workspaceLogoUrl = payload.workspaceLogoUrl?.trim();
+  const brandLogoUrl = config.brandLogoUrl || '';
   const ctaUrl = `${config.appUrl}?${new URLSearchParams({
     invitation: payload.invitationDocumentId,
     mode: 'signup',
   }).toString()}`;
+  const previewText = `${actionCopy} Organizacion: ${payload.organizationName}. Rol: ${payload.roleName}.`;
+
+  const text = [
+    subjectPrefix,
+    '',
+    actionCopy,
+    '',
+    `Organizacion: ${payload.organizationName}`,
+    workspaceName ? `Workspace: ${workspaceName}` : '',
+    `Rol sugerido: ${payload.roleName}`,
+    inviterLine ? `Invitado por: ${inviterLine}` : '',
+    '',
+    `Aceptar invitacion: ${ctaUrl}`,
+    '',
+    'Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.',
+    'Si el boton no abre, copia y pega el enlace en tu navegador.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const workspaceLogoBlock = workspaceLogoUrl
+    ? `
+        <td style="padding-left:16px;" align="right">
+          <div style="display:inline-block;padding:10px;border:1px solid #dbe7f3;border-radius:18px;background:#ffffff;">
+            <img src="${workspaceLogoUrl}" alt="${workspaceName || payload.organizationName}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:16px;object-fit:cover;" />
+          </div>
+        </td>
+      `
+    : '';
+
+  const workspaceCard = workspaceName
+    ? `
+        <div style="margin:0 0 24px;padding:16px 18px;border:1px solid #dbe7f3;border-radius:20px;background:#f8fbff;">
+          <div style="font-size:12px;line-height:18px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6b7f95;margin-bottom:8px;">
+            Workspace
+          </div>
+          <div style="font-size:18px;line-height:26px;font-weight:700;color:#102a43;">
+            ${workspaceName}
+          </div>
+        </div>
+      `
+    : '';
+
+  const brandLogoBlock = brandLogoUrl
+    ? `
+        <td style="padding-right:16px;">
+          <img src="${brandLogoUrl}" alt="QA Tracker" width="56" height="56" style="display:block;width:56px;height:56px;border-radius:18px;object-fit:cover;box-shadow:0 12px 24px rgba(15,23,42,0.12);" />
+        </td>
+      `
+    : '';
 
   return {
     from: config.from!,
     to: payload.recipientEmail,
     subject: `${subjectPrefix}: ${payload.organizationName}`,
-    text: [
-      actionCopy,
-      `Organización: ${payload.organizationName}`,
-      `Rol sugerido: ${payload.roleName}`,
-      inviterLine ? `Invitado por: ${inviterLine}` : '',
-      '',
-      `Acepta la invitacion en QA Tracker: ${ctaUrl}`,
-      'Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.',
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    text,
     html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#102A43;">
-        <h2 style="margin-bottom:8px;">${subjectPrefix}</h2>
-        <p>${actionCopy}</p>
-        <p><strong>Organización:</strong> ${payload.organizationName}</p>
-        <p><strong>Rol sugerido:</strong> ${payload.roleName}</p>
-        ${
-          inviterLine
-            ? `<p><strong>Invitado por:</strong> ${inviterLine}</p>`
-            : ''
-        }
-        <p>
-          <a href="${ctaUrl}" style="display:inline-block;background:#123F68;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;">
-            Aceptar invitacion
-          </a>
-        </p>
-        <p style="color:#5D748B;">
-          Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.
-        </p>
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        ${previewText}
+      </div>
+      <div style="margin:0;padding:32px 16px;background:#eef5fb;font-family:Arial,sans-serif;color:#102a43;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:680px;">
+                <tr>
+                  <td style="padding-bottom:18px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:linear-gradient(135deg,#ffffff 0%,#f5fbff 100%);border:1px solid #dbe7f3;border-radius:28px;overflow:hidden;">
+                      <tr>
+                        <td style="padding:24px 28px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="middle">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                  <tr>
+                                    ${brandLogoBlock}
+                                    <td valign="middle">
+                                      <div style="font-size:24px;line-height:30px;font-weight:700;color:#102a43;">QA Tracker</div>
+                                      <div style="font-size:13px;line-height:20px;color:#5d748b;">Invitacion a workspace</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                              ${workspaceLogoBlock}
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:0 28px 28px;">
+                          <div style="padding:28px;border-radius:24px;background:#ffffff;border:1px solid #e5edf5;">
+                            <div style="font-size:12px;line-height:18px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#6b7f95;margin-bottom:10px;">
+                              ${subjectPrefix}
+                            </div>
+                            <div style="font-size:30px;line-height:38px;font-weight:700;color:#102a43;margin-bottom:12px;">
+                              ${payload.organizationName}
+                            </div>
+                            <div style="font-size:16px;line-height:26px;color:#365069;margin-bottom:24px;">
+                              ${actionCopy}
+                            </div>
+                            ${workspaceCard}
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
+                              <tr>
+                                <td style="padding:0 0 14px;">
+                                  <div style="font-size:13px;line-height:20px;color:#6b7f95;">Organizacion</div>
+                                  <div style="font-size:16px;line-height:24px;font-weight:700;color:#102a43;">${payload.organizationName}</div>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td style="padding:0 0 14px;">
+                                  <div style="font-size:13px;line-height:20px;color:#6b7f95;">Rol sugerido</div>
+                                  <div style="font-size:16px;line-height:24px;font-weight:700;color:#102a43;">${payload.roleName}</div>
+                                </td>
+                              </tr>
+                              ${
+                                inviterLine
+                                  ? `
+                                      <tr>
+                                        <td style="padding:0;">
+                                          <div style="font-size:13px;line-height:20px;color:#6b7f95;">Invitado por</div>
+                                          <div style="font-size:16px;line-height:24px;font-weight:700;color:#102a43;">${inviterLine}</div>
+                                        </td>
+                                      </tr>
+                                    `
+                                  : ''
+                              }
+                            </table>
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:22px;">
+                              <tr>
+                                <td align="center" bgcolor="#123f68" style="border-radius:14px;">
+                                  <a href="${ctaUrl}" style="display:inline-block;padding:14px 22px;font-size:15px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;">
+                                    Aceptar invitacion
+                                  </a>
+                                </td>
+                              </tr>
+                            </table>
+                            <div style="font-size:14px;line-height:22px;color:#5d748b;margin-bottom:10px;">
+                              Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.
+                            </div>
+                            <div style="font-size:12px;line-height:20px;color:#7b8ba1;word-break:break-word;">
+                              Si el boton no abre, copia este enlace en tu navegador:<br />
+                              <a href="${ctaUrl}" style="color:#123f68;text-decoration:underline;">${ctaUrl}</a>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       </div>
     `,
   };

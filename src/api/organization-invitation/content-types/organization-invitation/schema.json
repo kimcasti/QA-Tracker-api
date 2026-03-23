@@ -24,6 +24,12 @@
       "default": "pending",
       "required": true
     },
+    "workspaceProjectDocumentId": {
+      "type": "string"
+    },
+    "workspaceName": {
+      "type": "string"
+    },
     "organization": {
       "type": "relation",
       "relation": "manyToOne",

@@ -210,6 +210,8 @@ async function sendInvitationEmail(input: {
   recipientEmail: string;
   organizationName: string;
   roleName: string;
+  workspaceName?: string;
+  workspaceLogoUrl?: string;
   inviterName?: string;
   inviterEmail?: string;
   invitationStatus: 'new' | 'resent';
@@ -219,10 +221,55 @@ async function sendInvitationEmail(input: {
     recipientEmail: input.recipientEmail,
     organizationName: input.organizationName,
     roleName: input.roleName,
+    workspaceName: input.workspaceName,
+    workspaceLogoUrl: input.workspaceLogoUrl,
     inviterName: input.inviterName,
     inviterEmail: input.inviterEmail,
     invitationStatus: input.invitationStatus,
   });
+}
+
+function getPublicApiUrl() {
+  return String(process.env.PUBLIC_API_URL || '').trim().replace(/\/$/, '');
+}
+
+async function resolveWorkspaceBranding(
+  organizationDocumentId: string,
+  workspaceProjectDocumentId?: string,
+) {
+  if (!workspaceProjectDocumentId) {
+    return {
+      workspaceProjectDocumentId: undefined,
+      workspaceName: undefined,
+      workspaceLogoUrl: undefined,
+    };
+  }
+
+  const workspaceProject = await strapi.documents('api::project.project').findOne({
+    documentId: workspaceProjectDocumentId,
+    populate: {
+      organization: true,
+    },
+  });
+
+  if (!workspaceProject || workspaceProject.organization?.documentId !== organizationDocumentId) {
+    return {
+      workspaceProjectDocumentId: undefined,
+      workspaceName: undefined,
+      workspaceLogoUrl: undefined,
+    };
+  }
+
+  const publicApiUrl = getPublicApiUrl();
+
+  return {
+    workspaceProjectDocumentId: workspaceProject.documentId,
+    workspaceName: workspaceProject.name || undefined,
+    workspaceLogoUrl:
+      publicApiUrl && workspaceProject.logoDataUrl
+        ? `${publicApiUrl}/api/projects/${workspaceProject.documentId}/logo`
+        : undefined,
+  };
 }
 
 export default {
@@ -289,6 +336,7 @@ export default {
     const payload = ctx.request.body?.data || {};
     const email = normalizeEmail(payload.email);
     const roleDocumentId = String(payload.roleDocumentId || '').trim();
+    const workspaceProjectDocumentId = String(payload.workspaceProjectDocumentId || '').trim();
 
     if (!email) {
       throw new errors.ValidationError('Email is required.');
@@ -344,6 +392,11 @@ export default {
       throw new errors.NotFoundError('Organization not found.');
     }
 
+    const workspaceBranding = await resolveWorkspaceBranding(
+      teamContext.organizationDocumentId,
+      workspaceProjectDocumentId || undefined,
+    );
+
     const created = await strapi.db
       .query('api::organization-invitation.organization-invitation' as any)
       .create({
@@ -354,6 +407,8 @@ export default {
           organization: organizationId,
           organizationRole: roleRecord.id,
           invitedBy: userId,
+          workspaceProjectDocumentId: workspaceBranding.workspaceProjectDocumentId || null,
+          workspaceName: workspaceBranding.workspaceName || null,
         },
       });
 
@@ -368,6 +423,8 @@ export default {
         recipientEmail: email,
         organizationName: teamContext.organizationName,
         roleName: roleRecord.name,
+        workspaceName: workspaceBranding.workspaceName,
+        workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
         inviterEmail: ctx.state.user?.email,
         inviterName: ctx.state.user?.username,
         invitationStatus: 'new',
@@ -544,12 +601,19 @@ export default {
       throw new errors.NotFoundError('Invitation not found.');
     }
 
+    const workspaceBranding = await resolveWorkspaceBranding(
+      teamContext.organizationDocumentId,
+      invitation.workspaceProjectDocumentId || undefined,
+    );
+
     try {
       await sendInvitationEmail({
         invitationDocumentId,
         recipientEmail: invitation.email,
         organizationName: invitation.organization?.name || teamContext.organizationName,
         roleName: invitation.organizationRole?.name || 'Viewer',
+        workspaceName: invitation.workspaceName || workspaceBranding.workspaceName,
+        workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
         inviterEmail: ctx.state.user?.email,
         inviterName: ctx.state.user?.username,
         invitationStatus: 'resent',
