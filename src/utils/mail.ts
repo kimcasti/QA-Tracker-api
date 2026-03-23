@@ -13,6 +13,7 @@ type InvitationEmailPayload = {
 let cachedTransporter: nodemailer.Transporter | null = null;
 
 const DEFAULT_SMTP_TIMEOUT_MS = 15000;
+const DEFAULT_MAILTRAP_API_URL = 'https://send.api.mailtrap.io/api/send';
 
 function parseBoolean(value?: string) {
   return ['1', 'true', 'yes', 'on'].includes((value || '').trim().toLowerCase());
@@ -25,6 +26,13 @@ function getMailConfig() {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.MAIL_FROM?.trim();
+  const mailtrapApiToken = process.env.MAILTRAP_API_TOKEN?.trim();
+  const mailtrapApiUrl = (
+    process.env.MAILTRAP_API_URL ||
+    DEFAULT_MAILTRAP_API_URL
+  )
+    .trim()
+    .replace(/\/$/, '');
   const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || DEFAULT_SMTP_TIMEOUT_MS);
   const appUrl = (process.env.INVITATION_APP_URL || process.env.APP_URL || 'http://localhost:3000')
     .trim()
@@ -37,6 +45,8 @@ function getMailConfig() {
     user,
     pass,
     from,
+    mailtrapApiToken,
+    mailtrapApiUrl,
     timeoutMs,
     appUrl,
   };
@@ -92,6 +102,24 @@ function getTransporter() {
   return cachedTransporter;
 }
 
+function parseFromAddress(input: string) {
+  const match = input.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+
+  if (!match) {
+    return {
+      email: input.trim(),
+    };
+  }
+
+  const displayName = match[1].trim().replace(/^"|"$/g, '');
+  const email = match[2].trim();
+
+  return {
+    email,
+    name: displayName || undefined,
+  };
+}
+
 function buildInvitationEmail(payload: InvitationEmailPayload) {
   const config = getMailConfig();
   const subjectPrefix = payload.invitationStatus === 'resent' ? 'Invitacion reenviada' : 'Invitacion';
@@ -144,10 +172,87 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
   };
 }
 
+async function sendWithMailtrapApi(
+  payload: InvitationEmailPayload,
+  message: ReturnType<typeof buildInvitationEmail>,
+) {
+  const config = getMailConfig();
+
+  if (!config.mailtrapApiToken || !config.from) {
+    throw new Error('Mailtrap API is not configured. Set MAILTRAP_API_TOKEN and MAIL_FROM.');
+  }
+
+  const from = parseFromAddress(config.from);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+
+  try {
+    console.info('[mail] Sending organization invitation email via Mailtrap API', {
+      apiUrl: config.mailtrapApiUrl,
+      from: config.from,
+      to: payload.recipientEmail,
+      timeoutMs: config.timeoutMs,
+    });
+
+    const response = await fetch(config.mailtrapApiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.mailtrapApiToken}`,
+        'Api-Token': config.mailtrapApiToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [{ email: payload.recipientEmail }],
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text();
+
+      throw new Error(
+        `Mailtrap API request failed with status ${response.status}: ${responseBody || response.statusText}`,
+      );
+    }
+
+    console.info('[mail] Invitation email sent successfully via Mailtrap API', {
+      to: payload.recipientEmail,
+      invitationDocumentId: payload.invitationDocumentId,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error && error.name === 'AbortError'
+        ? `Mailtrap API send timed out after ${config.timeoutMs}ms.`
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+    console.error('[mail] Invitation email failed via Mailtrap API', {
+      to: payload.recipientEmail,
+      invitationDocumentId: payload.invitationDocumentId,
+      error: message,
+    });
+
+    throw new Error(message);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function sendOrganizationInvitationEmail(payload: InvitationEmailPayload) {
   const config = getMailConfig();
-  const transporter = getTransporter();
   const message = buildInvitationEmail(payload);
+
+  if (config.mailtrapApiToken) {
+    await sendWithMailtrapApi(payload, message);
+    return;
+  }
+
+  const transporter = getTransporter();
 
   try {
     console.info('[mail] Sending organization invitation email', {
