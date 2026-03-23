@@ -12,6 +12,8 @@ type InvitationEmailPayload = {
 
 let cachedTransporter: nodemailer.Transporter | null = null;
 
+const DEFAULT_SMTP_TIMEOUT_MS = 15000;
+
 function parseBoolean(value?: string) {
   return ['1', 'true', 'yes', 'on'].includes((value || '').trim().toLowerCase());
 }
@@ -23,6 +25,7 @@ function getMailConfig() {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.MAIL_FROM?.trim();
+  const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || DEFAULT_SMTP_TIMEOUT_MS);
   const appUrl = (process.env.INVITATION_APP_URL || process.env.APP_URL || 'http://localhost:3000')
     .trim()
     .replace(/\/$/, '');
@@ -34,8 +37,32 @@ function getMailConfig() {
     user,
     pass,
     from,
+    timeoutMs,
     appUrl,
   };
+}
+
+function resetTransporter() {
+  if (cachedTransporter) {
+    cachedTransporter.close();
+  }
+  cachedTransporter = null;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }) as Promise<T>;
 }
 
 function getTransporter() {
@@ -55,6 +82,10 @@ function getTransporter() {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    requireTLS: !config.secure,
+    connectionTimeout: config.timeoutMs,
+    greetingTimeout: config.timeoutMs,
+    socketTimeout: config.timeoutMs,
     auth: config.user ? { user: config.user, pass: config.pass } : undefined,
   });
 
@@ -114,7 +145,37 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
 }
 
 export async function sendOrganizationInvitationEmail(payload: InvitationEmailPayload) {
+  const config = getMailConfig();
   const transporter = getTransporter();
   const message = buildInvitationEmail(payload);
-  await transporter.sendMail(message);
+
+  try {
+    console.info('[mail] Sending organization invitation email', {
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      from: config.from,
+      to: payload.recipientEmail,
+      timeoutMs: config.timeoutMs,
+    });
+
+    await withTimeout(
+      transporter.sendMail(message),
+      config.timeoutMs,
+      `SMTP send timed out after ${config.timeoutMs}ms.`,
+    );
+
+    console.info('[mail] Invitation email sent successfully', {
+      to: payload.recipientEmail,
+      invitationDocumentId: payload.invitationDocumentId,
+    });
+  } catch (error) {
+    resetTransporter();
+    console.error('[mail] Invitation email failed', {
+      to: payload.recipientEmail,
+      invitationDocumentId: payload.invitationDocumentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }

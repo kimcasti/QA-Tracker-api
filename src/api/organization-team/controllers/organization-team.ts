@@ -373,6 +373,12 @@ export default {
         invitationStatus: 'new',
       });
     } catch (mailError) {
+      strapi.log.error(
+        `[organization-team] Failed to send invitation email to ${email}: ${
+          mailError instanceof Error ? mailError.message : String(mailError)
+        }`,
+      );
+
       await strapi.documents('api::organization-invitation.organization-invitation' as any).delete({
         documentId: invitationDocumentId,
       });
@@ -538,15 +544,27 @@ export default {
       throw new errors.NotFoundError('Invitation not found.');
     }
 
-    await sendInvitationEmail({
-      invitationDocumentId,
-      recipientEmail: invitation.email,
-      organizationName: invitation.organization?.name || teamContext.organizationName,
-      roleName: invitation.organizationRole?.name || 'Viewer',
-      inviterEmail: ctx.state.user?.email,
-      inviterName: ctx.state.user?.username,
-      invitationStatus: 'resent',
-    });
+    try {
+      await sendInvitationEmail({
+        invitationDocumentId,
+        recipientEmail: invitation.email,
+        organizationName: invitation.organization?.name || teamContext.organizationName,
+        roleName: invitation.organizationRole?.name || 'Viewer',
+        inviterEmail: ctx.state.user?.email,
+        inviterName: ctx.state.user?.username,
+        invitationStatus: 'resent',
+      });
+    } catch (mailError) {
+      strapi.log.error(
+        `[organization-team] Failed to resend invitation email to ${invitation.email}: ${
+          mailError instanceof Error ? mailError.message : String(mailError)
+        }`,
+      );
+
+      throw new errors.ApplicationError(
+        mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
+      );
+    }
 
     await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
       documentId: invitationDocumentId,
