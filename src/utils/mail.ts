@@ -25,6 +25,23 @@ function normalizeUrl(value?: string) {
   return String(value || '').trim().replace(/\/$/, '');
 }
 
+function inferMailtrapApiToken(host?: string, user?: string, pass?: string) {
+  const normalizedHost = String(host || '').trim().toLowerCase();
+  const normalizedUser = String(user || '').trim().toLowerCase();
+  const normalizedPass = String(pass || '').trim();
+
+  const isMailtrapHost =
+    normalizedHost === 'live.smtp.mailtrap.io' || normalizedHost.endsWith('.mailtrap.io');
+  const isMailtrapUser =
+    normalizedUser === 'api' || normalizedUser === 'smtp@mailtrap.io';
+
+  if (!isMailtrapHost || !isMailtrapUser || !normalizedPass) {
+    return undefined;
+  }
+
+  return normalizedPass;
+}
+
 function getMailConfig() {
   const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT || 587);
@@ -32,7 +49,8 @@ function getMailConfig() {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.MAIL_FROM?.trim();
-  const mailtrapApiToken = process.env.MAILTRAP_API_TOKEN?.trim();
+  const mailtrapApiToken =
+    process.env.MAILTRAP_API_TOKEN?.trim() || inferMailtrapApiToken(host, user, pass);
   const mailtrapApiUrl = normalizeUrl(process.env.MAILTRAP_API_URL || DEFAULT_MAILTRAP_API_URL);
   const publicApiUrl = normalizeUrl(process.env.PUBLIC_API_URL);
   const brandLogoUrl = normalizeUrl(
@@ -52,6 +70,7 @@ function getMailConfig() {
     pass,
     from,
     mailtrapApiToken,
+    mailtrapApiTokenSource: process.env.MAILTRAP_API_TOKEN?.trim() ? 'env' : 'smtp-pass',
     mailtrapApiUrl,
     publicApiUrl,
     brandLogoUrl,
@@ -322,6 +341,7 @@ async function sendWithMailtrapApi(
       from: config.from,
       to: payload.recipientEmail,
       timeoutMs: config.timeoutMs,
+      tokenSource: config.mailtrapApiTokenSource,
     });
 
     const response = await fetch(config.mailtrapApiUrl, {
