@@ -12,6 +12,11 @@ type InvitationEmailPayload = {
   invitationStatus?: 'new' | 'resent';
 };
 
+export type InvitationEmailHealth = {
+  manualShareRecommended: boolean;
+  summary?: string;
+};
+
 let cachedTransporter: nodemailer.Transporter | null = null;
 
 const DEFAULT_SMTP_TIMEOUT_MS = 15000;
@@ -76,6 +81,65 @@ function getMailConfig() {
     brandLogoUrl,
     timeoutMs,
     appUrl,
+  };
+}
+
+function isPlaceholderMailFrom(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized.includes('example.com') || normalized.includes('.local');
+}
+
+function isPlaceholderAppUrl(value?: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized.includes('replace_with_client_public_url');
+}
+
+export function buildInvitationAcceptanceUrl(invitationDocumentId: string) {
+  const { appUrl } = getMailConfig();
+  return `${appUrl}?${new URLSearchParams({
+    invitation: invitationDocumentId,
+    mode: 'signup',
+  }).toString()}`;
+}
+
+export function getInvitationEmailHealth(): InvitationEmailHealth {
+  const config = getMailConfig();
+  const normalizedHost = String(config.host || '').trim().toLowerCase();
+
+  if (!config.host && !config.mailtrapApiToken) {
+    return {
+      manualShareRecommended: true,
+      summary:
+        'El correo de invitaciones no esta configurado en este entorno. Completa SMTP o Mailtrap Sending en Railway.',
+    };
+  }
+
+  if (normalizedHost === 'sandbox.smtp.mailtrap.io') {
+    return {
+      manualShareRecommended: true,
+      summary:
+        'Las invitaciones estan usando Mailtrap Sandbox. Ese modo no entrega correos a Gmail ni a bandejas reales.',
+    };
+  }
+
+  if (isPlaceholderMailFrom(config.from)) {
+    return {
+      manualShareRecommended: true,
+      summary:
+        'MAIL_FROM sigue con un remitente placeholder. Usa un dominio verificado para mejorar la entrega.',
+    };
+  }
+
+  if (isPlaceholderAppUrl(config.appUrl)) {
+    return {
+      manualShareRecommended: true,
+      summary:
+        'INVITATION_APP_URL aun apunta a un placeholder. Comparte el enlace manual mientras ajustas la URL final del cliente.',
+    };
+  }
+
+  return {
+    manualShareRecommended: false,
   };
 }
 
@@ -159,10 +223,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
   const workspaceName = payload.workspaceName?.trim();
   const workspaceLogoUrl = payload.workspaceLogoUrl?.trim();
   const brandLogoUrl = config.brandLogoUrl || '';
-  const ctaUrl = `${config.appUrl}?${new URLSearchParams({
-    invitation: payload.invitationDocumentId,
-    mode: 'signup',
-  }).toString()}`;
+  const ctaUrl = buildInvitationAcceptanceUrl(payload.invitationDocumentId);
   const previewText = `${actionCopy} Organizacion: ${payload.organizationName}. Rol: ${payload.roleName}.`;
 
   const text = [

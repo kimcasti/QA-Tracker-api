@@ -1,6 +1,10 @@
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
-import { sendOrganizationInvitationEmail } from '../../../utils/mail';
+import {
+  buildInvitationAcceptanceUrl,
+  getInvitationEmailHealth,
+  sendOrganizationInvitationEmail,
+} from '../../../utils/mail';
 import { getUserMemberships } from '../../../utils/tenant';
 
 const TEAM_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'viewer'] as const;
@@ -146,6 +150,7 @@ async function getInvitations(organizationDocumentId: string) {
   return invitations.map(invitation => ({
     documentId: invitation.documentId,
     email: invitation.email,
+    acceptUrl: buildInvitationAcceptanceUrl(invitation.documentId),
     organizationId: invitation.organization?.documentId || organizationDocumentId,
     role: invitation.organizationRole
       ? {
@@ -182,6 +187,7 @@ async function buildTeamPayload(userId: number) {
     availableRoles: await getAvailableRoles(teamContext.organizationDocumentId),
     members: await getMembers(teamContext.organizationDocumentId, userId),
     invitations: await getInvitations(teamContext.organizationDocumentId),
+    invitationEmailHealth: getInvitationEmailHealth(),
   };
 }
 
