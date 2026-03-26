@@ -149,6 +149,21 @@ async function resolveOrganizationDocumentId(userId: number, payload: Functional
   return requestedOrganizationDocumentId ?? allowedOrganizationDocumentIds[0];
 }
 
+const responsePopulate = {
+  project: {
+    fields: ['key'],
+  },
+  module: {
+    fields: ['name'],
+  },
+  personaRoles: {
+    fields: ['name'],
+  },
+  sprint: {
+    fields: ['name'],
+  },
+} as const;
+
 export default factories.createCoreController('api::functionality.functionality', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -187,13 +202,7 @@ export default factories.createCoreController('api::functionality.functionality'
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        module: true,
-        personaRoles: true,
-        sprint: true,
-      },
+      populate: responsePopulate,
     });
 
     ctx.body = { data: created };
@@ -216,9 +225,6 @@ export default factories.createCoreController('api::functionality.functionality'
       populate: {
         organization: true,
         project: true,
-        module: true,
-        personaRoles: true,
-        sprint: true,
       },
     });
 
@@ -263,13 +269,7 @@ export default factories.createCoreController('api::functionality.functionality'
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        module: true,
-        personaRoles: true,
-        sprint: true,
-      },
+      populate: responsePopulate,
     });
 
     ctx.body = { data: updated };
