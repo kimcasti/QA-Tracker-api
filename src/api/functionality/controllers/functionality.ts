@@ -162,7 +162,7 @@ const responsePopulate = {
   sprint: {
     fields: ['name'],
   },
-} as const;
+};
 
 export default factories.createCoreController('api::functionality.functionality', () => ({
   async create(ctx) {
@@ -202,7 +202,7 @@ export default factories.createCoreController('api::functionality.functionality'
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
-      populate: responsePopulate,
+      populate: responsePopulate as any,
     });
 
     ctx.body = { data: created };
@@ -269,7 +269,7 @@ export default factories.createCoreController('api::functionality.functionality'
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
-      populate: responsePopulate,
+      populate: responsePopulate as any,
     });
 
     ctx.body = { data: updated };
