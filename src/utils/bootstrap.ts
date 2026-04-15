@@ -262,7 +262,22 @@ export async function linkMembershipForRole(
   });
 
   if (existing) {
-    return existing;
+    await strapi.documents('api::organization-membership.organization-membership').update({
+      documentId: existing.documentId,
+      data: {
+        isActive: true,
+        organizationRole: targetRole.documentId,
+      },
+    });
+
+    return strapi.documents('api::organization-membership.organization-membership').findOne({
+      documentId: existing.documentId,
+      populate: {
+        organization: true,
+        organizationRole: true,
+        user: true,
+      },
+    });
   }
 
   const organization = await strapi.db.query('api::organization.organization').findOne({

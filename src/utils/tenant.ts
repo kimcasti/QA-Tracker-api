@@ -16,8 +16,8 @@ type MembershipRecord = {
   };
 };
 
-export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
-  const memberships = (await strapi
+async function findActiveMemberships(strapi: Core.Strapi, userId: number) {
+  return (await strapi
     .documents('api::organization-membership.organization-membership')
     .findMany({
       filters: {
@@ -29,6 +29,22 @@ export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
         organizationRole: true,
       },
     })) as unknown as MembershipRecord[];
+}
+
+async function hasMembershipHistory(strapi: Core.Strapi, userId: number) {
+  const membership = await strapi
+    .documents('api::organization-membership.organization-membership')
+    .findFirst({
+      filters: {
+        user: { id: userId },
+      },
+    });
+
+  return Boolean(membership?.documentId);
+}
+
+export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
+  const memberships = await findActiveMemberships(strapi, userId);
 
   if (memberships.length > 0) {
     return memberships;
@@ -71,37 +87,19 @@ export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
     }
   }
 
-  const invitedMemberships = (await strapi
-    .documents('api::organization-membership.organization-membership')
-    .findMany({
-      filters: {
-        isActive: true,
-        user: { id: userId },
-      },
-      populate: {
-        organization: true,
-        organizationRole: true,
-      },
-    })) as unknown as MembershipRecord[];
+  const invitedMemberships = await findActiveMemberships(strapi, userId);
 
   if (invitedMemberships.length > 0) {
     return invitedMemberships;
   }
 
+  if (await hasMembershipHistory(strapi, userId)) {
+    return [];
+  }
+
   await ensureUserWorkspace(strapi, userId);
 
-  return (await strapi
-    .documents('api::organization-membership.organization-membership')
-    .findMany({
-      filters: {
-        isActive: true,
-        user: { id: userId },
-      },
-      populate: {
-        organization: true,
-        organizationRole: true,
-      },
-    })) as unknown as MembershipRecord[];
+  return findActiveMemberships(strapi, userId);
 }
 
 export function getAllowedOrganizationDocumentIds(memberships: MembershipRecord[]) {

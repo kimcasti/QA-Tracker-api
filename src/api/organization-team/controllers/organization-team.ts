@@ -29,6 +29,19 @@ function roleOrderIndex(code?: string) {
   return index === -1 ? TEAM_ROLE_CODES.length : index;
 }
 
+function toNumericUserId(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
 async function getOrganizationDbId(documentId: string) {
   const organization = await strapi.db.query('api::organization.organization').findOne({
     where: { documentId },
@@ -54,6 +67,39 @@ async function getRoleDbRecord(roleDocumentId: string, organizationDocumentId: s
       documentId: role.documentId,
     },
   });
+}
+
+async function countActiveMembershipsForUser(userId: number) {
+  const memberships = await strapi.db
+    .query('api::organization-membership.organization-membership')
+    .findMany({
+      where: {
+        user: userId,
+        isActive: true,
+      },
+    });
+
+  return memberships.length;
+}
+
+async function setUserBlockedState(userId: number, blocked: boolean) {
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+  });
+
+  if (!user?.id || Boolean(user.blocked) === blocked) {
+    return;
+  }
+
+  await strapi.db.query('plugin::users-permissions.user').update({
+    where: { id: userId },
+    data: { blocked },
+  });
+}
+
+async function syncUserAccessState(userId: number) {
+  const activeMemberships = await countActiveMembershipsForUser(userId);
+  await setUserBlockedState(userId, activeMemberships === 0);
 }
 
 async function getActiveTeamContext(userId: number): Promise<TeamContext> {
@@ -451,6 +497,10 @@ export default {
       );
     }
 
+    if (existingUser?.id) {
+      await setUserBlockedState(existingUser.id, false);
+    }
+
     ctx.body = await buildTeamPayload(userId);
   },
 
@@ -538,6 +588,11 @@ export default {
       },
     });
 
+    const targetUserId = toNumericUserId(membership.user?.id);
+    if (targetUserId) {
+      await syncUserAccessState(targetUserId);
+    }
+
     ctx.body = await buildTeamPayload(userId);
   },
 
@@ -575,6 +630,11 @@ export default {
         isActive: true,
       },
     });
+
+    const targetUserId = toNumericUserId(membership.user?.id);
+    if (targetUserId) {
+      await setUserBlockedState(targetUserId, false);
+    }
 
     ctx.body = await buildTeamPayload(userId);
   },
