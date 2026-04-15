@@ -26,6 +26,10 @@ function parseBoolean(value?: string) {
   return ['1', 'true', 'yes', 'on'].includes((value || '').trim().toLowerCase());
 }
 
+export function isInvitationEmailEnabled() {
+  return parseBoolean(process.env.INVITATION_SEND_EMAIL || 'false');
+}
+
 function normalizeUrl(value?: string) {
   return String(value || '').trim().replace(/\/$/, '');
 }
@@ -103,6 +107,14 @@ export function buildInvitationAcceptanceUrl(invitationDocumentId: string) {
 }
 
 export function getInvitationEmailHealth(): InvitationEmailHealth {
+  if (!isInvitationEmailEnabled()) {
+    return {
+      manualShareRecommended: true,
+      summary:
+        'Las invitaciones estan en modo enlace compartido. Crea la invitacion y comparte el enlace publico manualmente.',
+    };
+  }
+
   const config = getMailConfig();
   const normalizedHost = String(config.host || '').trim().toLowerCase();
 

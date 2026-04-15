@@ -63,9 +63,12 @@ Feel free to check out the [Strapi GitHub repository](https://github.com/strapi/
 
 ## Invitation emails
 
-To test organization invitations with real email delivery, configure these variables in `.env`:
+Shared-link invitations are enabled by default. Set `INVITATION_SEND_EMAIL=true` only when you want the API to send invitation emails automatically.
+
+To enable real email delivery for invitations, configure these variables in `.env`:
 
 ```env
+INVITATION_SEND_EMAIL=true
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_SECURE=false

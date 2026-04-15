@@ -3,6 +3,7 @@ import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
 import {
   buildInvitationAcceptanceUrl,
   getInvitationEmailHealth,
+  isInvitationEmailEnabled,
   sendOrganizationInvitationEmail,
 } from '../../../utils/mail';
 import { getUserMemberships } from '../../../utils/tenant';
@@ -423,32 +424,26 @@ export default {
       throw new errors.ApplicationError('The invitation could not be created.');
     }
 
-    try {
-      await sendInvitationEmail({
-        invitationDocumentId,
-        recipientEmail: email,
-        organizationName: teamContext.organizationName,
-        roleName: roleRecord.name,
-        workspaceName: workspaceBranding.workspaceName,
-        workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
-        inviterEmail: ctx.state.user?.email,
-        inviterName: ctx.state.user?.username,
-        invitationStatus: 'new',
-      });
-    } catch (mailError) {
-      strapi.log.error(
-        `[organization-team] Failed to send invitation email to ${email}: ${
-          mailError instanceof Error ? mailError.message : String(mailError)
-        }`,
-      );
-
-      await strapi.documents('api::organization-invitation.organization-invitation' as any).delete({
-        documentId: invitationDocumentId,
-      });
-
-      throw new errors.ApplicationError(
-        mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
-      );
+    if (isInvitationEmailEnabled()) {
+      try {
+        await sendInvitationEmail({
+          invitationDocumentId,
+          recipientEmail: email,
+          organizationName: teamContext.organizationName,
+          roleName: roleRecord.name,
+          workspaceName: workspaceBranding.workspaceName,
+          workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
+          inviterEmail: ctx.state.user?.email,
+          inviterName: ctx.state.user?.username,
+          invitationStatus: 'new',
+        });
+      } catch (mailError) {
+        strapi.log.error(
+          `[organization-team] Failed to send invitation email to ${email}: ${
+            mailError instanceof Error ? mailError.message : String(mailError)
+          }`,
+        );
+      }
     }
 
     ctx.body = await buildTeamPayload(userId);
@@ -591,6 +586,12 @@ export default {
 
     if (!invitationDocumentId) {
       throw new errors.ValidationError('Invitation is required.');
+    }
+
+    if (!isInvitationEmailEnabled()) {
+      throw new errors.ValidationError(
+        'Invitation emails are disabled. Copy and share the public link manually.',
+      );
     }
 
     const invitation = await strapi.documents(
