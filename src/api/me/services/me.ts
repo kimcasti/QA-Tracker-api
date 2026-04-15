@@ -1,5 +1,10 @@
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES } from '../../../utils/access';
+import {
+  PRO_PLAN_PRICE_MONTHLY_USD,
+  getProjectLimitForPlan,
+  normalizeOrganizationPlan,
+} from '../../../utils/subscription';
 import { getUserMemberships } from '../../../utils/tenant';
 
 export default () => ({
@@ -42,6 +47,18 @@ export default () => ({
       populate: ['role'],
     });
 
+    const activeMembership = memberships[0];
+    const activeOrganizationDocumentId = activeMembership?.organization?.documentId;
+    const activeRoleCode = activeMembership?.organizationRole?.code || '';
+    const activeOrganizationPlan = normalizeOrganizationPlan(activeMembership?.organization?.plan);
+    const activeOrganizationProjectCount = activeOrganizationDocumentId
+      ? projects.filter(project => project.organization?.documentId === activeOrganizationDocumentId).length
+      : 0;
+    const projectLimit = getProjectLimitForPlan(activeOrganizationPlan);
+    const allowedByRole = ADMIN_ROLES.includes(activeRoleCode as any);
+    const limitReached =
+      projectLimit !== null && activeOrganizationProjectCount >= projectLimit;
+
     return {
       user: {
         id: user?.id,
@@ -54,6 +71,15 @@ export default () => ({
         role: membership.organizationRole,
       })),
       projects,
+      projectQuota: {
+        plan: activeOrganizationPlan,
+        currentCount: activeOrganizationProjectCount,
+        limit: projectLimit,
+        allowedByRole,
+        canCreate: allowedByRole && !limitReached,
+        limitReached,
+        upgradePriceMonthlyUsd: PRO_PLAN_PRICE_MONTHLY_USD,
+      },
     };
   },
 

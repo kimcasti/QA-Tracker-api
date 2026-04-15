@@ -8,6 +8,8 @@ type MembershipRecord = {
     documentId: string;
     name: string;
     slug: string;
+    plan?: 'starter' | 'growth' | 'enterprise';
+    status?: 'active' | 'inactive';
   };
   organizationRole?: {
     documentId: string;

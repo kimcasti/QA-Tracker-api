@@ -1,5 +1,12 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
+import { ADMIN_ROLES } from '../../../utils/access';
+import {
+  PRO_PLAN_PRICE_MONTHLY_USD,
+  STARTER_PROJECT_LIMIT,
+  getProjectLimitForPlan,
+  normalizeOrganizationPlan,
+} from '../../../utils/subscription';
 import { getUserMemberships } from '../../../utils/tenant';
 
 type ProjectPayload = {
@@ -102,6 +109,56 @@ async function resolveOrganizationDocumentId(userId: number, requestedOrganizati
   return allowedOrganizationDocumentIds[0];
 }
 
+async function ensureProjectCreationAllowed(userId: number, requestedOrganization?: string) {
+  const memberships = await getUserMemberships(strapi, userId);
+  const targetMembership =
+    (requestedOrganization
+      ? memberships.find(
+          membership => membership.organization?.documentId === requestedOrganization,
+        )
+      : null) || memberships[0];
+
+  const organizationDocumentId = targetMembership?.organization?.documentId;
+  const roleCode = targetMembership?.organizationRole?.code || '';
+
+  if (!organizationDocumentId) {
+    throw new errors.ForbiddenError('An active organization membership is required.');
+  }
+
+  if (!ADMIN_ROLES.includes(roleCode as any)) {
+    throw new errors.ForbiddenError('Only Owner or QA Lead can create projects.');
+  }
+
+  const organization = await strapi.documents('api::organization.organization').findOne({
+    documentId: organizationDocumentId,
+  });
+
+  if (!organization?.documentId) {
+    throw new errors.NotFoundError('Organization not found.');
+  }
+
+  const plan = normalizeOrganizationPlan(organization.plan);
+  const projectLimit = getProjectLimitForPlan(plan);
+
+  if (projectLimit !== null) {
+    const existingProjects = await strapi.documents('api::project.project').findMany({
+      filters: {
+        organization: {
+          documentId: organizationDocumentId,
+        },
+      },
+    });
+
+    if (existingProjects.length >= projectLimit) {
+      throw new errors.ForbiddenError(
+        `Tu organización alcanzó el límite de ${STARTER_PROJECT_LIMIT} proyectos del plan Starter. Actualiza a Pro por $${PRO_PLAN_PRICE_MONTHLY_USD}/mes para seguir creando proyectos.`,
+      );
+    }
+  }
+
+  return organizationDocumentId;
+}
+
 export default factories.createCoreController('api::project.project', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -111,7 +168,7 @@ export default factories.createCoreController('api::project.project', () => ({
     }
 
     const payload = (ctx.request.body?.data || {}) as ProjectPayload;
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload.organization);
+    const organizationDocumentId = await ensureProjectCreationAllowed(userId, payload.organization);
 
     const created = await strapi.documents('api::project.project').create({
       data: {
