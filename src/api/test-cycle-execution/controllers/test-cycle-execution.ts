@@ -26,6 +26,20 @@ type TestCycleExecutionPayload = {
   functionality?: unknown;
   testCase?: unknown;
   bug?: unknown;
+  allowDestructiveReset?: boolean;
+};
+
+const testCyclePopulate = {
+  organization: true,
+  project: true,
+  sprint: true,
+  executions: {
+    populate: {
+      functionality: true,
+      testCase: true,
+      bug: true,
+    },
+  },
 };
 
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
@@ -154,6 +168,59 @@ function buildTestCycleExecutionData(
   return data;
 }
 
+function normalizeExecutionDate(value: unknown) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return null;
+}
+
+function hasTextContent(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isDestructiveExecutionReset(
+  existing: any,
+  next: TestCycleExecutionPayload,
+) {
+  const existingExecuted = Boolean(existing.executed);
+  const nextExecuted = Boolean(next.executed);
+  const existingResult = existing.result || 'not_executed';
+  const nextResult = next.result || 'not_executed';
+
+  return (
+    (existingExecuted && !nextExecuted) ||
+    (existingResult !== 'not_executed' && nextResult === 'not_executed') ||
+    (hasTextContent(existing.evidence) && !hasTextContent(next.evidence)) ||
+    (hasTextContent(existing.evidenceImage) && !hasTextContent(next.evidenceImage)) ||
+    (hasTextContent(existing.bugTitle) && !hasTextContent(next.bugTitle)) ||
+    (hasTextContent(existing.linkedBugId) && !hasTextContent(next.linkedBugId))
+  );
+}
+
+function calculateCycleStats(
+  executions: Array<{
+    executed?: boolean | null;
+    result?: 'passed' | 'failed' | 'blocked' | 'not_executed' | null;
+  }>,
+) {
+  const totalTests = executions.length;
+  const passed = executions.filter(item => item.result === 'passed').length;
+  const failed = executions.filter(item => item.result === 'failed').length;
+  const blocked = executions.filter(item => item.result === 'blocked').length;
+  const pending = executions.filter(item => !item.executed).length;
+  const passRate = totalTests > 0 ? Math.round((passed / totalTests) * 1000) / 10 : 0;
+
+  return {
+    totalTests,
+    passed,
+    failed,
+    blocked,
+    pending,
+    passRate,
+  };
+}
+
 export default factories.createCoreController(
   'api::test-cycle-execution.test-cycle-execution',
   () => ({
@@ -273,6 +340,165 @@ export default factories.createCoreController(
       });
 
       ctx.body = { data: updated };
+    },
+
+    async persist(ctx) {
+      const userId = ctx.state.user?.id;
+
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
+
+      const documentId = ctx.params.documentId || ctx.params.id;
+      if (!documentId) {
+        throw new errors.ValidationError('Test cycle execution documentId is required.');
+      }
+
+      const existing = await strapi.documents('api::test-cycle-execution.test-cycle-execution').findOne({
+        documentId,
+        populate: {
+          organization: true,
+          project: true,
+          testCycle: true,
+          functionality: true,
+          testCase: true,
+          bug: true,
+        },
+      });
+
+      if (!existing) {
+        throw new errors.NotFoundError('Test cycle execution not found.');
+      }
+
+      const payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
+      const projectDocumentId = existing.project?.documentId ?? null;
+      const testCycleDocumentId = existing.testCycle?.documentId ?? null;
+
+      if (!projectDocumentId) {
+        throw new errors.ValidationError('Test cycle execution project is required.');
+      }
+
+      if (!testCycleDocumentId) {
+        throw new errors.ValidationError('Test cycle execution testCycle is required.');
+      }
+
+      const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+        ...payload,
+        project: payload.project ?? existing.project?.documentId,
+        organization: payload.organization ?? existing.organization?.documentId,
+      });
+
+      const functionalityDocumentId = await resolveFunctionalityDocumentId(
+        payload.functionality,
+        projectDocumentId,
+        existing.functionality?.documentId ?? null,
+      );
+
+      const mergedPayload: TestCycleExecutionPayload = {
+        moduleName: hasOwnProperty(payload, 'moduleName')
+          ? payload.moduleName
+          : existing.moduleName ?? null,
+        functionalityName: hasOwnProperty(payload, 'functionalityName')
+          ? payload.functionalityName
+          : existing.functionalityName ?? null,
+        testCaseTitle: hasOwnProperty(payload, 'testCaseTitle')
+          ? payload.testCaseTitle
+          : existing.testCaseTitle ?? null,
+        executed: hasOwnProperty(payload, 'executed')
+          ? payload.executed
+          : Boolean(existing.executed),
+        date: hasOwnProperty(payload, 'date')
+          ? payload.date
+          : normalizeExecutionDate(existing.date),
+        result: hasOwnProperty(payload, 'result') ? payload.result : existing.result ?? 'not_executed',
+        executionMode: hasOwnProperty(payload, 'executionMode')
+          ? payload.executionMode
+          : existing.executionMode ?? 'manual',
+        evidence: hasOwnProperty(payload, 'evidence') ? payload.evidence : existing.evidence ?? null,
+        evidenceImage: hasOwnProperty(payload, 'evidenceImage')
+          ? payload.evidenceImage
+          : existing.evidenceImage ?? null,
+        bugTitle: hasOwnProperty(payload, 'bugTitle')
+          ? payload.bugTitle
+          : existing.bugTitle ?? null,
+        bugLink: hasOwnProperty(payload, 'bugLink') ? payload.bugLink : existing.bugLink ?? null,
+        severity: hasOwnProperty(payload, 'severity')
+          ? payload.severity
+          : existing.severity ?? null,
+        linkedBugId: hasOwnProperty(payload, 'linkedBugId')
+          ? payload.linkedBugId
+          : existing.linkedBugId ?? null,
+        organization: organizationDocumentId,
+        project: projectDocumentId,
+        testCycle: testCycleDocumentId,
+        functionality: hasOwnProperty(payload, 'functionality')
+          ? payload.functionality
+          : existing.functionality?.documentId ?? null,
+        testCase: hasOwnProperty(payload, 'testCase')
+          ? payload.testCase
+          : existing.testCase?.documentId ?? null,
+        bug: hasOwnProperty(payload, 'bug') ? payload.bug : existing.bug?.documentId ?? null,
+      };
+
+      if (!payload.allowDestructiveReset && isDestructiveExecutionReset(existing, mergedPayload)) {
+        throw new errors.ValidationError(
+          'This execution already contains progress. Refresh the cycle before making destructive changes.',
+        );
+      }
+
+      await strapi.documents('api::test-cycle-execution.test-cycle-execution').update({
+        documentId,
+        data: {
+          ...buildTestCycleExecutionData(mergedPayload, projectDocumentId, functionalityDocumentId),
+          organization: organizationDocumentId,
+          testCycle: testCycleDocumentId,
+        } as any,
+        populate: {
+          organization: true,
+          project: true,
+          testCycle: true,
+          functionality: true,
+          testCase: true,
+          bug: true,
+        },
+      });
+
+      const refreshedCycle = await strapi.documents('api::test-cycle.test-cycle').findOne({
+        documentId: testCycleDocumentId,
+        populate: testCyclePopulate,
+      });
+
+      if (!refreshedCycle) {
+        throw new errors.NotFoundError('Test cycle not found.');
+      }
+
+      const stats = calculateCycleStats(refreshedCycle.executions || []);
+
+      const updatedCycle = await strapi.documents('api::test-cycle.test-cycle').update({
+        documentId: testCycleDocumentId,
+        data: {
+          code: refreshedCycle.code,
+          cycleType: refreshedCycle.cycleType,
+          date: refreshedCycle.date,
+          totalTests: stats.totalTests,
+          passed: stats.passed,
+          failed: stats.failed,
+          blocked: stats.blocked,
+          pending: stats.pending,
+          passRate: stats.passRate,
+          note: refreshedCycle.note || null,
+          status: refreshedCycle.status || 'in_progress',
+          tester: refreshedCycle.tester || null,
+          buildVersion: refreshedCycle.buildVersion || null,
+          environment: refreshedCycle.environment || null,
+          organization: refreshedCycle.organization?.documentId || organizationDocumentId,
+          project: refreshedCycle.project?.documentId || projectDocumentId,
+          sprint: refreshedCycle.sprint?.documentId || null,
+        } as any,
+        populate: testCyclePopulate,
+      });
+
+      ctx.body = { data: updatedCycle };
     },
   }),
 );

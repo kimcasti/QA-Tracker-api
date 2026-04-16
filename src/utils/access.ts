@@ -103,6 +103,7 @@ export const EXPOSED_ACTIONS = [
   'api::test-cycle-execution.test-cycle-execution.findOne',
   'api::test-cycle-execution.test-cycle-execution.create',
   'api::test-cycle-execution.test-cycle-execution.update',
+  'api::test-cycle-execution.test-cycle-execution.persist',
   'api::test-cycle-execution.test-cycle-execution.delete',
   'api::bug.bug.find',
   'api::bug.bug.findOne',
