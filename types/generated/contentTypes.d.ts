@@ -1156,6 +1156,8 @@ export interface ApiTestCycleExecutionTestCycleExecution
     draftAndPublish: false;
   };
   attributes: {
+    assignedTesterEmail: Schema.Attribute.String;
+    assignedTesterName: Schema.Attribute.String;
     bug: Schema.Attribute.Relation<'manyToOne', 'api::bug.bug'>;
     bugLink: Schema.Attribute.String;
     bugTitle: Schema.Attribute.String;

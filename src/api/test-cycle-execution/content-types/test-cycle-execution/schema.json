@@ -55,6 +55,12 @@
     "linkedBugId": {
       "type": "string"
     },
+    "assignedTesterName": {
+      "type": "string"
+    },
+    "assignedTesterEmail": {
+      "type": "string"
+    },
     "organization": {
       "type": "relation",
       "relation": "manyToOne",
