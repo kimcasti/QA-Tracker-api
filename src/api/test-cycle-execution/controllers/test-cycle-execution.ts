@@ -78,6 +78,12 @@ const lightTestCyclePopulate = {
   sprint: true,
 };
 
+const executionDedupPopulate = {
+  functionality: true,
+  testCase: true,
+  bug: true,
+};
+
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -396,9 +402,6 @@ function buildExecutionDocumentData(source: any) {
     linkedBugId: source.linkedBugId || null,
     assignedTesterName: source.assignedTesterName || null,
     assignedTesterEmail: normalizeEmail(source.assignedTesterEmail),
-    organization: source.organization?.documentId || null,
-    project: source.project?.documentId || null,
-    testCycle: source.testCycle?.documentId || null,
     functionality: source.functionality?.documentId || null,
     testCase: source.testCase?.documentId || null,
     bug: source.bug?.documentId || null,
@@ -410,14 +413,7 @@ async function getCycleExecutions(testCycleDocumentId: string) {
     filters: {
       testCycle: { documentId: testCycleDocumentId },
     },
-    populate: {
-      organization: true,
-      project: true,
-      testCycle: true,
-      functionality: true,
-      testCase: true,
-      bug: true,
-    },
+    populate: executionDedupPopulate,
     sort: ['updatedAt:desc'],
   })) as any[];
 }
@@ -478,21 +474,11 @@ async function dedupeCycleExecutions(
       documentId: canonical.documentId,
       data: buildExecutionDocumentData({
         ...merged,
-        organization: canonical.organization || merged.organization,
-        project: canonical.project || merged.project,
-        testCycle: canonical.testCycle || merged.testCycle,
         functionality: canonical.functionality || merged.functionality,
         testCase: canonical.testCase || merged.testCase,
         bug: canonical.bug || merged.bug,
       }) as any,
-      populate: {
-        organization: true,
-        project: true,
-        testCycle: true,
-        functionality: true,
-        testCase: true,
-        bug: true,
-      },
+      populate: executionDedupPopulate,
     });
 
     for (const duplicate of group) {
