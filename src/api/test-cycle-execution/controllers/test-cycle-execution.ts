@@ -72,6 +72,12 @@ const testCyclePopulate = {
   },
 };
 
+const lightTestCyclePopulate = {
+  organization: true,
+  project: true,
+  sprint: true,
+};
+
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -529,11 +535,14 @@ async function syncCycleStats(
   organizationDocumentId: string,
   projectDocumentId: string,
   preferredDocumentId?: string,
+  options?: {
+    lightResponse?: boolean;
+  },
 ) {
   const dedupedExecutions = await dedupeCycleExecutions(testCycleDocumentId, preferredDocumentId);
   const refreshedCycle = await strapi.documents('api::test-cycle.test-cycle').findOne({
     documentId: testCycleDocumentId,
-    populate: testCyclePopulate,
+    populate: options?.lightResponse ? lightTestCyclePopulate : testCyclePopulate,
   });
 
   if (!refreshedCycle) {
@@ -563,7 +572,7 @@ async function syncCycleStats(
       project: refreshedCycle.project?.documentId || projectDocumentId,
       sprint: refreshedCycle.sprint?.documentId || null,
     } as any,
-    populate: testCyclePopulate,
+    populate: options?.lightResponse ? lightTestCyclePopulate : testCyclePopulate,
   });
 }
 
@@ -1096,6 +1105,8 @@ export default factories.createCoreController(
         testCycleDocumentId,
         organizationDocumentId,
         projectDocumentId,
+        undefined,
+        { lightResponse: true },
       );
 
       ctx.body = { data: updatedCycle };
