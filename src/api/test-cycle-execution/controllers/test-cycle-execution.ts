@@ -33,6 +33,18 @@ type TestCycleExecutionPayload = {
   allowDestructiveReset?: boolean;
 };
 
+type BatchExecutionSyncItem = {
+  documentId?: string | null;
+  data?: TestCycleExecutionPayload | null;
+};
+
+type BatchExecutionSyncPayload = {
+  testCycle?: unknown;
+  project?: unknown;
+  organization?: unknown;
+  items?: BatchExecutionSyncItem[] | null;
+};
+
 type SlackDirectoryMember = {
   email?: string | null;
   username?: string | null;
@@ -925,6 +937,168 @@ export default factories.createCoreController(
       });
 
       ctx.body = { data: updated };
+    },
+
+    async batchSync(ctx) {
+      const userId = ctx.state.user?.id;
+
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
+
+      const payload = (ctx.request.body?.data || {}) as BatchExecutionSyncPayload;
+      const testCycleDocumentId = extractRelationDocumentId(payload.testCycle);
+      const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
+      const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
+      const items = Array.isArray(payload.items) ? payload.items : [];
+
+      if (!testCycleDocumentId) {
+        throw new errors.ValidationError('Test cycle execution testCycle is required.');
+      }
+
+      const testCycle = await strapi.documents('api::test-cycle.test-cycle').findOne({
+        documentId: testCycleDocumentId,
+        populate: {
+          organization: true,
+          project: true,
+        },
+      });
+
+      if (!testCycle) {
+        throw new errors.NotFoundError('Test cycle not found.');
+      }
+
+      const projectDocumentId = requestedProjectDocumentId ?? testCycle.project?.documentId ?? null;
+
+      if (!projectDocumentId) {
+        throw new errors.ValidationError('Test cycle execution project is required.');
+      }
+
+      const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+        project: projectDocumentId,
+        organization: requestedOrganizationDocumentId ?? testCycle.organization?.documentId ?? null,
+      });
+
+      const dedupedExecutions = await dedupeCycleExecutions(testCycleDocumentId);
+      const existingExecutionsByDocumentId = new Map(
+        dedupedExecutions.map(item => [item.documentId, item]),
+      );
+      const existingExecutionsByIdentity = new Map(
+        dedupedExecutions.map(item => [
+          buildExecutionIdentity({
+            moduleName: item.moduleName,
+            functionalityName: item.functionalityName,
+            functionalityDocumentId: item.functionality?.documentId,
+            functionalityCode: item.functionality?.code,
+            testCaseDocumentId: item.testCase?.documentId,
+            testCaseTitle: item.testCase?.title || item.testCaseTitle,
+          }),
+          item,
+        ]),
+      );
+
+      const savedExecutionIds = new Set<string>();
+
+      for (const item of items) {
+        const executionPayload = (item?.data || {}) as TestCycleExecutionPayload;
+        const functionalityDocumentId = await resolveFunctionalityDocumentId(
+          executionPayload.functionality,
+          projectDocumentId,
+        );
+        const executionIdentity = buildExecutionIdentity({
+          moduleName: executionPayload.moduleName,
+          functionalityName: executionPayload.functionalityName,
+          functionalityDocumentId,
+          testCaseDocumentId: extractRelationDocumentId(executionPayload.testCase),
+          testCaseTitle: executionPayload.testCaseTitle,
+        });
+
+        const existingExecution =
+          (item?.documentId
+            ? existingExecutionsByDocumentId.get(item.documentId)
+            : undefined) || existingExecutionsByIdentity.get(executionIdentity);
+
+        if (existingExecution) {
+          const accessContext = await getCurrentExecutionAccessContext(
+            userId,
+            existingExecution.organization?.documentId ?? organizationDocumentId,
+            existingExecution.assignedTesterName,
+          );
+          assertExecutionAssignmentAccess(existingExecution, accessContext);
+
+          const safePayload = mergeExecutionPayloadWithExisting(
+            existingExecution,
+            executionPayload,
+            organizationDocumentId,
+            projectDocumentId,
+            testCycleDocumentId,
+          );
+
+          const updated = await strapi.documents(
+            'api::test-cycle-execution.test-cycle-execution',
+          ).update({
+            documentId: existingExecution.documentId,
+            data: {
+              ...buildTestCycleExecutionData(safePayload, projectDocumentId, functionalityDocumentId),
+              organization: organizationDocumentId,
+              testCycle: testCycleDocumentId,
+            } as any,
+            populate: {
+              organization: true,
+              project: true,
+              testCycle: true,
+              functionality: true,
+              testCase: true,
+              bug: true,
+            },
+          });
+
+          savedExecutionIds.add(updated.documentId);
+          existingExecutionsByDocumentId.set(updated.documentId, updated);
+          existingExecutionsByIdentity.set(executionIdentity, updated);
+          continue;
+        }
+
+        const created = await strapi.documents(
+          'api::test-cycle-execution.test-cycle-execution',
+        ).create({
+          data: {
+            ...buildTestCycleExecutionData(executionPayload, projectDocumentId, functionalityDocumentId),
+            organization: organizationDocumentId,
+            testCycle: testCycleDocumentId,
+          } as any,
+          populate: {
+            organization: true,
+            project: true,
+            testCycle: true,
+            functionality: true,
+            testCase: true,
+            bug: true,
+          },
+        });
+
+        savedExecutionIds.add(created.documentId);
+        existingExecutionsByDocumentId.set(created.documentId, created);
+        existingExecutionsByIdentity.set(executionIdentity, created);
+      }
+
+      await Promise.all(
+        dedupedExecutions
+          .filter(item => !savedExecutionIds.has(item.documentId))
+          .map(item =>
+            strapi.documents('api::test-cycle-execution.test-cycle-execution').delete({
+              documentId: item.documentId,
+            }),
+          ),
+      );
+
+      const updatedCycle = await syncCycleStats(
+        testCycleDocumentId,
+        organizationDocumentId,
+        projectDocumentId,
+      );
+
+      ctx.body = { data: updatedCycle };
     },
 
     async persist(ctx) {
