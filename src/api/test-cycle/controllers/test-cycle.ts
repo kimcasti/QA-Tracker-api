@@ -1,6 +1,6 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
-import { ADMIN_ROLES } from '../../../utils/access';
+import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
 import {
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
@@ -118,6 +118,11 @@ function isCycleReopen(payload: TestCyclePayload, existing: any) {
   return existing.status === 'completed' && nextStatus === 'in_progress';
 }
 
+function isCycleFinalize(payload: TestCyclePayload, existing: any) {
+  const nextStatus = payload.status ?? existing.status;
+  return existing.status !== 'completed' && nextStatus === 'completed';
+}
+
 async function ensureCycleAdminAccess(
   userId: number,
   organizationDocumentId?: string | null,
@@ -135,6 +140,24 @@ async function ensureCycleAdminAccess(
     throw new errors.ForbiddenError(
       'Only Owner or QA Lead can edit or reopen regression and smoke cycles.',
     );
+  }
+}
+
+async function ensureCycleOwnerAccess(
+  userId: number,
+  organizationDocumentId?: string | null,
+) {
+  if (!organizationDocumentId) {
+    throw new errors.ForbiddenError('An active organization membership is required.');
+  }
+
+  const memberships = await getUserMemberships(strapi, userId);
+  const membership = memberships.find(
+    item => item.organization?.documentId === organizationDocumentId,
+  );
+
+  if (!membership || !OWNER_ROLES.includes((membership.organizationRole?.code || '') as any)) {
+    throw new errors.ForbiddenError('Only Owner can finalize regression and smoke cycles.');
   }
 }
 
@@ -274,6 +297,10 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
       throw new errors.ValidationError(
         `A test cycle with code "${cycleCode}" already exists in this project.`,
       );
+    }
+
+    if (isCycleFinalize(payload, existing)) {
+      await ensureCycleOwnerAccess(userId, existing.organization?.documentId);
     }
 
     if (
