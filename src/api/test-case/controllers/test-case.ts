@@ -27,6 +27,19 @@ type TestCasePayload = {
   functionality?: unknown;
 };
 
+type TestCaseDocumentWithRelations = {
+  documentId: string;
+  project?: {
+    documentId?: string;
+  } | null;
+  functionality?: {
+    documentId?: string;
+  } | null;
+  organization?: {
+    documentId?: string;
+  } | null;
+};
+
 function extractRelationDocumentId(rawValue: unknown): string | null {
   if (!rawValue) return null;
   if (typeof rawValue === 'string') return rawValue;
@@ -58,6 +71,15 @@ function buildTestCaseData(payload: TestCasePayload) {
     isAutomated: Boolean(payload.isAutomated),
   };
 }
+
+const responsePopulate = {
+  project: {
+    fields: ['key'],
+  },
+  functionality: {
+    fields: ['code'],
+  },
+};
 
 async function resolveOrganizationDocumentId(userId: number, payload: TestCasePayload) {
   const memberships = await getUserMemberships(strapi, userId);
@@ -124,6 +146,38 @@ async function resolveFunctionalityDocumentId(
 }
 
 export default factories.createCoreController('api::test-case.test-case', () => ({
+  async find(ctx) {
+    await this.validateQuery(ctx);
+    const sanitizedQuery = await this.sanitizeQuery(ctx);
+    const query = {
+      ...sanitizedQuery,
+      // Avoid populating full project records here because large text/blob-like
+      // project fields cause MySQL temp tables to overflow in production.
+      populate: responsePopulate,
+    };
+
+    const { results, pagination } = await strapi.service('api::test-case.test-case').find(query);
+    const sanitizedResults = await this.sanitizeOutput(results, ctx);
+    return this.transformResponse(sanitizedResults, { pagination });
+  },
+
+  async findOne(ctx) {
+    const documentId = ctx.params.documentId || ctx.params.id;
+
+    if (!documentId) {
+      throw new errors.ValidationError('Test case documentId is required.');
+    }
+
+    await this.validateQuery(ctx);
+    const sanitizedQuery = await this.sanitizeQuery(ctx);
+    const entity = await strapi.service('api::test-case.test-case').findOne(documentId, {
+      ...sanitizedQuery,
+      populate: responsePopulate,
+    });
+    const sanitizedEntity = await this.sanitizeOutput(entity, ctx);
+    return this.transformResponse(sanitizedEntity);
+  },
+
   async create(ctx) {
     const userId = ctx.state.user?.id;
 
@@ -156,11 +210,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
         project: projectDocumentId,
         functionality: functionalityDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        functionality: true,
-      },
+      populate: responsePopulate as any,
     });
 
     ctx.body = { data: created };
@@ -178,14 +228,17 @@ export default factories.createCoreController('api::test-case.test-case', () => 
       throw new errors.ValidationError('Test case documentId is required.');
     }
 
-    const existing = await strapi.documents('api::test-case.test-case').findOne({
+    const existing = (await strapi.documents('api::test-case.test-case').findOne({
       documentId,
       populate: {
-        organization: true,
-        project: true,
-        functionality: true,
-      },
-    });
+        project: {
+          fields: ['key'],
+        },
+        functionality: {
+          fields: ['code'],
+        },
+      } as any,
+    })) as TestCaseDocumentWithRelations | null;
 
     if (!existing) {
       throw new errors.NotFoundError('Test case not found.');
@@ -223,11 +276,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
         project: projectDocumentId,
         functionality: functionalityDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        functionality: true,
-      },
+      populate: responsePopulate as any,
     });
 
     ctx.body = { data: updated };
