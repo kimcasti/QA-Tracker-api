@@ -116,10 +116,52 @@ async function resolveFunctionalityDocumentId(
   return fallbackDocumentId ?? null;
 }
 
+async function resolveScopedRelationDocumentId(
+  uid: string,
+  rawValue: unknown,
+  projectDocumentId: string,
+  alternateField: string,
+  fallbackDocumentId?: string | null,
+) {
+  const requestedValue = extractRelationDocumentId(rawValue);
+
+  if (requestedValue) {
+    const byDocumentId = await strapi.documents(uid as any).findFirst({
+      filters: {
+        documentId: requestedValue,
+        project: { documentId: projectDocumentId },
+      } as any,
+      fields: ['documentId'],
+    });
+
+    if (byDocumentId?.documentId) {
+      return byDocumentId.documentId;
+    }
+
+    const byAlternateField = await strapi.documents(uid as any).findFirst({
+      filters: {
+        [alternateField]: requestedValue,
+        project: { documentId: projectDocumentId },
+      } as any,
+      fields: ['documentId'],
+    });
+
+    if (byAlternateField?.documentId) {
+      return byAlternateField.documentId;
+    }
+  }
+
+  return fallbackDocumentId ?? null;
+}
+
 function buildBugData(
   payload: BugPayload,
   projectDocumentId: string,
   functionalityDocumentId?: string | null,
+  sprintDocumentId?: string | null,
+  testCaseDocumentId?: string | null,
+  testRunDocumentId?: string | null,
+  testCycleDocumentId?: string | null,
 ) {
   const data: Record<string, unknown> = {
     internalBugId: payload.internalBugId || '',
@@ -145,25 +187,79 @@ function buildBugData(
   }
 
   if (hasOwnProperty(payload, 'sprint')) {
-    data.sprint = extractRelationDocumentId(payload.sprint);
+    data.sprint = sprintDocumentId ?? null;
   }
 
   if (hasOwnProperty(payload, 'testCase')) {
-    data.testCase = extractRelationDocumentId(payload.testCase);
+    data.testCase = testCaseDocumentId ?? null;
   }
 
   if (hasOwnProperty(payload, 'testRun')) {
-    data.testRun = extractRelationDocumentId(payload.testRun);
+    data.testRun = testRunDocumentId ?? null;
   }
 
   if (hasOwnProperty(payload, 'testCycle')) {
-    data.testCycle = extractRelationDocumentId(payload.testCycle);
+    data.testCycle = testCycleDocumentId ?? null;
   }
 
   return data;
 }
 
+const summaryFields = [
+  'documentId',
+  'internalBugId',
+  'externalBugId',
+  'title',
+  'description',
+  'severity',
+  'bugLink',
+  'evidenceImage',
+  'origin',
+  'functionalityName',
+  'moduleName',
+  'detectedAt',
+  'reportedBy',
+  'status',
+  'testCaseTitle',
+  'linkedSourceId',
+] as const;
+
+const summaryPopulate = {
+  project: {
+    fields: ['key'],
+  },
+  functionality: {
+    fields: ['code', 'name'],
+  },
+  sprint: {
+    fields: ['name'],
+  },
+  testCase: {
+    fields: ['title'],
+  },
+  testRun: {
+    fields: ['documentId'],
+  },
+  testCycle: {
+    fields: ['code'],
+  },
+};
+
 export default factories.createCoreController('api::bug.bug', () => ({
+  async listSummary(ctx) {
+    await this.validateQuery(ctx);
+    const sanitizedQuery = await this.sanitizeQuery(ctx);
+    const query = {
+      ...sanitizedQuery,
+      fields: summaryFields,
+      populate: summaryPopulate,
+    };
+
+    const { results, pagination } = await strapi.service('api::bug.bug').find(query);
+    const sanitizedResults = await this.sanitizeOutput(results, ctx);
+    return this.transformResponse(sanitizedResults, { pagination });
+  },
+
   async create(ctx) {
     const userId = ctx.state.user?.id;
 
@@ -183,10 +279,37 @@ export default factories.createCoreController('api::bug.bug', () => ({
       payload.functionality,
       projectDocumentId,
     );
+    const sprintDocumentId = await resolveScopedRelationDocumentId(
+      'api::sprint.sprint',
+      payload.sprint,
+      projectDocumentId,
+      'name',
+    );
+    const testCaseDocumentId = await resolveScopedRelationDocumentId(
+      'api::test-case.test-case',
+      payload.testCase,
+      projectDocumentId,
+      'title',
+    );
+    const testCycleDocumentId = await resolveScopedRelationDocumentId(
+      'api::test-cycle.test-cycle',
+      payload.testCycle,
+      projectDocumentId,
+      'code',
+    );
+    const testRunDocumentId = extractRelationDocumentId(payload.testRun);
 
     const created = await strapi.documents('api::bug.bug').create({
       data: {
-        ...buildBugData(payload, projectDocumentId, functionalityDocumentId),
+        ...buildBugData(
+          payload,
+          projectDocumentId,
+          functionalityDocumentId,
+          sprintDocumentId,
+          testCaseDocumentId,
+          testRunDocumentId,
+          testCycleDocumentId,
+        ),
         organization: organizationDocumentId,
       } as any,
       populate: {
@@ -251,11 +374,42 @@ export default factories.createCoreController('api::bug.bug', () => ({
       projectDocumentId,
       existing.functionality?.documentId ?? null,
     );
+    const sprintDocumentId = await resolveScopedRelationDocumentId(
+      'api::sprint.sprint',
+      payload.sprint,
+      projectDocumentId,
+      'name',
+      existing.sprint?.documentId ?? null,
+    );
+    const testCaseDocumentId = await resolveScopedRelationDocumentId(
+      'api::test-case.test-case',
+      payload.testCase,
+      projectDocumentId,
+      'title',
+      existing.testCase?.documentId ?? null,
+    );
+    const testCycleDocumentId = await resolveScopedRelationDocumentId(
+      'api::test-cycle.test-cycle',
+      payload.testCycle,
+      projectDocumentId,
+      'code',
+      existing.testCycle?.documentId ?? null,
+    );
+    const testRunDocumentId =
+      extractRelationDocumentId(payload.testRun) ?? existing.testRun?.documentId ?? null;
 
     const updated = await strapi.documents('api::bug.bug').update({
       documentId,
       data: {
-        ...buildBugData(payload, projectDocumentId, functionalityDocumentId),
+        ...buildBugData(
+          payload,
+          projectDocumentId,
+          functionalityDocumentId,
+          sprintDocumentId,
+          testCaseDocumentId,
+          testRunDocumentId,
+          testCycleDocumentId,
+        ),
         organization: organizationDocumentId,
       } as any,
       populate: {

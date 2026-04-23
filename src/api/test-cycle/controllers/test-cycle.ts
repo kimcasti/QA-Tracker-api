@@ -83,6 +83,33 @@ function normalizeComparableDate(value?: string | null) {
   return normalizeComparableString(value);
 }
 
+const summaryFields = [
+  'documentId',
+  'code',
+  'cycleType',
+  'date',
+  'totalTests',
+  'passed',
+  'failed',
+  'blocked',
+  'pending',
+  'passRate',
+  'note',
+  'status',
+  'tester',
+  'buildVersion',
+  'environment',
+] as const;
+
+const summaryPopulate = {
+  project: {
+    fields: ['key'],
+  },
+  sprint: {
+    fields: ['name'],
+  },
+};
+
 function hasCycleConfigurationChanges(
   payload: TestCyclePayload,
   existing: any,
@@ -202,6 +229,20 @@ async function findDuplicateCycle(
 }
 
 export default factories.createCoreController('api::test-cycle.test-cycle', () => ({
+  async listSummary(ctx) {
+    await this.validateQuery(ctx);
+    const sanitizedQuery = await this.sanitizeQuery(ctx);
+    const query = {
+      ...sanitizedQuery,
+      fields: summaryFields,
+      populate: summaryPopulate,
+    };
+
+    const { results, pagination } = await strapi.service('api::test-cycle.test-cycle').find(query);
+    const sanitizedResults = await this.sanitizeOutput(results, ctx);
+    return this.transformResponse(sanitizedResults, { pagination });
+  },
+
   async create(ctx) {
     const userId = ctx.state.user?.id;
 

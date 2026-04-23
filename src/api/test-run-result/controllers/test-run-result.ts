@@ -113,10 +113,95 @@ async function resolveFunctionalityDocumentId(
   return fallbackDocumentId ?? null;
 }
 
+async function resolveTestCaseDocumentId(
+  rawTestCase: unknown,
+  projectDocumentId: string,
+  fallbackDocumentId?: string | null,
+) {
+  const requestedDocumentId = extractRelationDocumentId(rawTestCase);
+
+  if (requestedDocumentId) {
+    const testCaseByDocumentId = await strapi
+      .documents('api::test-case.test-case')
+      .findFirst({
+        filters: {
+          documentId: requestedDocumentId,
+          project: { documentId: projectDocumentId },
+        },
+      });
+
+    if (testCaseByDocumentId?.documentId) {
+      return testCaseByDocumentId.documentId;
+    }
+
+    const testCaseByTitle = await strapi
+      .documents('api::test-case.test-case')
+      .findFirst({
+        filters: {
+          title: requestedDocumentId,
+          project: { documentId: projectDocumentId },
+        },
+      });
+
+    if (testCaseByTitle?.documentId) {
+      return testCaseByTitle.documentId;
+    }
+  }
+
+  return fallbackDocumentId ?? null;
+}
+
+async function resolveBugDocumentId(
+  rawBug: unknown,
+  projectDocumentId: string,
+  fallbackDocumentId?: string | null,
+) {
+  const requestedDocumentId = extractRelationDocumentId(rawBug);
+
+  if (requestedDocumentId) {
+    const bugByDocumentId = await strapi.documents('api::bug.bug').findFirst({
+      filters: {
+        documentId: requestedDocumentId,
+        project: { documentId: projectDocumentId },
+      },
+    });
+
+    if (bugByDocumentId?.documentId) {
+      return bugByDocumentId.documentId;
+    }
+
+    const bugByInternalId = await strapi.documents('api::bug.bug').findFirst({
+      filters: {
+        internalBugId: requestedDocumentId,
+        project: { documentId: projectDocumentId },
+      },
+    });
+
+    if (bugByInternalId?.documentId) {
+      return bugByInternalId.documentId;
+    }
+
+    const bugByExternalId = await strapi.documents('api::bug.bug').findFirst({
+      filters: {
+        externalBugId: requestedDocumentId,
+        project: { documentId: projectDocumentId },
+      },
+    });
+
+    if (bugByExternalId?.documentId) {
+      return bugByExternalId.documentId;
+    }
+  }
+
+  return fallbackDocumentId ?? null;
+}
+
 function buildTestRunResultData(
   payload: TestRunResultPayload,
   projectDocumentId: string,
   functionalityDocumentId?: string | null,
+  testCaseDocumentId?: string | null,
+  bugDocumentId?: string | null,
 ) {
   const data: Record<string, unknown> = {
     result: payload.result || 'not_executed',
@@ -138,11 +223,11 @@ function buildTestRunResultData(
   }
 
   if (hasOwnProperty(payload, 'testCase')) {
-    data.testCase = extractRelationDocumentId(payload.testCase);
+    data.testCase = testCaseDocumentId ?? null;
   }
 
   if (hasOwnProperty(payload, 'bug')) {
-    data.bug = extractRelationDocumentId(payload.bug);
+    data.bug = bugDocumentId ?? null;
   }
 
   return data;
@@ -173,10 +258,21 @@ export default factories.createCoreController('api::test-run-result.test-run-res
       payload.functionality,
       projectDocumentId,
     );
+    const testCaseDocumentId = await resolveTestCaseDocumentId(
+      payload.testCase,
+      projectDocumentId,
+    );
+    const bugDocumentId = await resolveBugDocumentId(payload.bug, projectDocumentId);
 
     const created = await strapi.documents('api::test-run-result.test-run-result').create({
       data: {
-        ...buildTestRunResultData(payload, projectDocumentId, functionalityDocumentId),
+        ...buildTestRunResultData(
+          payload,
+          projectDocumentId,
+          functionalityDocumentId,
+          testCaseDocumentId,
+          bugDocumentId,
+        ),
         organization: organizationDocumentId,
         testRun: testRunDocumentId,
       } as any,
@@ -246,11 +342,27 @@ export default factories.createCoreController('api::test-run-result.test-run-res
       projectDocumentId,
       existing.functionality?.documentId ?? null,
     );
+    const testCaseDocumentId = await resolveTestCaseDocumentId(
+      payload.testCase,
+      projectDocumentId,
+      existing.testCase?.documentId ?? null,
+    );
+    const bugDocumentId = await resolveBugDocumentId(
+      payload.bug,
+      projectDocumentId,
+      existing.bug?.documentId ?? null,
+    );
 
     const updated = await strapi.documents('api::test-run-result.test-run-result').update({
       documentId,
       data: {
-        ...buildTestRunResultData(payload, projectDocumentId, functionalityDocumentId),
+        ...buildTestRunResultData(
+          payload,
+          projectDocumentId,
+          functionalityDocumentId,
+          testCaseDocumentId,
+          bugDocumentId,
+        ),
         organization: organizationDocumentId,
         testRun: testRunDocumentId,
       } as any,

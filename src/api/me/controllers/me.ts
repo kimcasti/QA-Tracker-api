@@ -1,4 +1,10 @@
 export default {
+  async projectContexts(ctx) {
+    const data = await strapi.service('api::me.me').projectContexts(ctx.state.user.id);
+
+    ctx.body = data;
+  },
+
   async workspace(ctx) {
     const data = await strapi.service('api::me.me').workspace(ctx.state.user.id);
 

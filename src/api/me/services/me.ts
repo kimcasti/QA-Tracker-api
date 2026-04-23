@@ -8,6 +8,58 @@ import {
 import { getUserMemberships } from '../../../utils/tenant';
 
 export default () => ({
+  async projectContexts(userId: number) {
+    const memberships = await strapi
+      .documents('api::organization-membership.organization-membership')
+      .findMany({
+        filters: {
+          user: { id: userId },
+          isActive: true,
+        },
+        populate: {
+          organization: {
+            fields: ['documentId', 'name'],
+          },
+        },
+      });
+
+    const organizationDocumentIds = memberships
+      .map(membership => membership.organization?.documentId)
+      .filter(Boolean);
+
+    const projects = organizationDocumentIds.length
+      ? await strapi.documents('api::project.project').findMany({
+          filters: {
+            organization: {
+              documentId: {
+                $in: organizationDocumentIds,
+              },
+            },
+          },
+          fields: ['documentId', 'key'],
+          populate: {
+            organization: {
+              fields: ['documentId', 'name'],
+            },
+          },
+          sort: ['name:asc'],
+        })
+      : [];
+
+    return {
+      projects: projects.map(project => ({
+        documentId: project.documentId,
+        key: project.key,
+        organization: project.organization
+          ? {
+              documentId: project.organization.documentId,
+              name: project.organization.name,
+            }
+          : undefined,
+      })),
+    };
+  },
+
   async workspace(userId: number) {
     const memberships = await strapi
       .documents('api::organization-membership.organization-membership')

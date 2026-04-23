@@ -46,7 +46,41 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
   return null;
 }
 
-function buildTestRunData(payload: TestRunPayload) {
+async function resolveSprintDocumentId(
+  rawSprint: unknown,
+  projectDocumentId: string,
+  fallbackDocumentId?: string | null,
+) {
+  const requestedDocumentId = extractRelationDocumentId(rawSprint);
+
+  if (requestedDocumentId) {
+    const sprintByDocumentId = await strapi.documents('api::sprint.sprint').findFirst({
+      filters: {
+        documentId: requestedDocumentId,
+        project: { documentId: projectDocumentId },
+      },
+    });
+
+    if (sprintByDocumentId?.documentId) {
+      return sprintByDocumentId.documentId;
+    }
+
+    const sprintByName = await strapi.documents('api::sprint.sprint').findFirst({
+      filters: {
+        name: requestedDocumentId,
+        project: { documentId: projectDocumentId },
+      },
+    });
+
+    if (sprintByName?.documentId) {
+      return sprintByName.documentId;
+    }
+  }
+
+  return fallbackDocumentId ?? null;
+}
+
+function buildTestRunData(payload: TestRunPayload, sprintDocumentId?: string | null) {
   const data: Record<string, unknown> = {
     title: payload.title || '',
     description: payload.description || null,
@@ -64,11 +98,38 @@ function buildTestRunData(payload: TestRunPayload) {
   };
 
   if (hasOwnProperty(payload, 'sprint')) {
-    data.sprint = extractRelationDocumentId(payload.sprint);
+    data.sprint = sprintDocumentId ?? null;
   }
 
   return data;
 }
+
+const summaryFields = [
+  'documentId',
+  'title',
+  'description',
+  'executionDate',
+  'status',
+  'testType',
+  'priority',
+  'tester',
+  'buildVersion',
+  'environment',
+  'selectedModules',
+  'selectedFunctionalities',
+] as const;
+
+const summaryPopulate = {
+  project: {
+    fields: ['key'],
+  },
+  sprint: {
+    fields: ['name'],
+  },
+  results: {
+    fields: ['result'],
+  },
+};
 
 async function resolveOrganizationDocumentId(userId: number, payload: TestRunPayload) {
   const memberships = await getUserMemberships(strapi, userId);
@@ -95,6 +156,20 @@ async function resolveOrganizationDocumentId(userId: number, payload: TestRunPay
 }
 
 export default factories.createCoreController('api::test-run.test-run', () => ({
+  async listSummary(ctx) {
+    await this.validateQuery(ctx);
+    const sanitizedQuery = await this.sanitizeQuery(ctx);
+    const query = {
+      ...sanitizedQuery,
+      fields: summaryFields,
+      populate: summaryPopulate,
+    };
+
+    const { results, pagination } = await strapi.service('api::test-run.test-run').find(query);
+    const sanitizedResults = await this.sanitizeOutput(results, ctx);
+    return this.transformResponse(sanitizedResults, { pagination });
+  },
+
   async create(ctx) {
     const userId = ctx.state.user?.id;
 
@@ -110,10 +185,11 @@ export default factories.createCoreController('api::test-run.test-run', () => ({
     }
 
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
+    const sprintDocumentId = await resolveSprintDocumentId(payload.sprint, projectDocumentId);
 
     const created = await strapi.documents('api::test-run.test-run').create({
       data: {
-        ...buildTestRunData(payload),
+        ...buildTestRunData(payload, sprintDocumentId),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
@@ -167,11 +243,16 @@ export default factories.createCoreController('api::test-run.test-run', () => ({
       project: payload.project ?? existing.project?.documentId,
       organization: payload.organization ?? existing.organization?.documentId,
     });
+    const sprintDocumentId = await resolveSprintDocumentId(
+      payload.sprint,
+      projectDocumentId,
+      existing.sprint?.documentId ?? null,
+    );
 
     const updated = await strapi.documents('api::test-run.test-run').update({
       documentId,
       data: {
-        ...buildTestRunData(payload),
+        ...buildTestRunData(payload, sprintDocumentId),
         organization: organizationDocumentId,
         project: projectDocumentId,
       } as any,
