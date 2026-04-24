@@ -875,6 +875,10 @@ export interface ApiProjectModuleProjectModule
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    testCaseTemplates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::test-case-template.test-case-template'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1077,6 +1081,68 @@ export interface ApiSprintSprint extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::test-plan.test-plan'
     >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiTestCaseTemplateTestCaseTemplate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'test_case_templates';
+  info: {
+    displayName: 'Test Case Template';
+    pluralName: 'test-case-templates';
+    singularName: 'test-case-template';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    expectedResult: Schema.Attribute.Text;
+    isAutomated: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::test-case-template.test-case-template'
+    > &
+      Schema.Attribute.Private;
+    module: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-module.project-module'
+    > &
+      Schema.Attribute.Required;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    preconditions: Schema.Attribute.Text;
+    priority: Schema.Attribute.Enumeration<
+      ['critical', 'high', 'medium', 'low']
+    > &
+      Schema.Attribute.DefaultTo<'medium'>;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    testSteps: Schema.Attribute.Text;
+    testType: Schema.Attribute.Enumeration<
+      [
+        'integration',
+        'functional',
+        'sanity',
+        'regression',
+        'smoke',
+        'exploratory',
+        'uat',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'functional'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1981,6 +2047,7 @@ declare module '@strapi/strapi' {
       'api::project-story-map.project-story-map': ApiProjectStoryMapProjectStoryMap;
       'api::project.project': ApiProjectProject;
       'api::sprint.sprint': ApiSprintSprint;
+      'api::test-case-template.test-case-template': ApiTestCaseTemplateTestCaseTemplate;
       'api::test-case.test-case': ApiTestCaseTestCase;
       'api::test-cycle-execution.test-cycle-execution': ApiTestCycleExecutionTestCycleExecution;
       'api::test-cycle.test-cycle': ApiTestCycleTestCycle;

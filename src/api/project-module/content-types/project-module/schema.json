@@ -35,6 +35,12 @@
       "relation": "oneToMany",
       "target": "api::functionality.functionality",
       "mappedBy": "module"
+    },
+    "testCaseTemplates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::test-case-template.test-case-template",
+      "mappedBy": "module"
     }
   }
 }

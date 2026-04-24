@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "test_case_templates",
+  "info": {
+    "singularName": "test-case-template",
+    "pluralName": "test-case-templates",
+    "displayName": "Test Case Template"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "preconditions": {
+      "type": "text"
+    },
+    "testSteps": {
+      "type": "text"
+    },
+    "expectedResult": {
+      "type": "text"
+    },
+    "testType": {
+      "type": "enumeration",
+      "enum": ["integration", "functional", "sanity", "regression", "smoke", "exploratory", "uat"],
+      "default": "functional"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium"
+    },
+    "isAutomated": {
+      "type": "boolean",
+      "default": false
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    },
+    "module": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-module.project-module",
+      "inversedBy": "testCaseTemplates",
+      "required": true
+    }
+  }
+}
