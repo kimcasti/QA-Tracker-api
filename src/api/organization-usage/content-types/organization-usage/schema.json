@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "organization_usages",
+  "info": {
+    "singularName": "organization-usage",
+    "pluralName": "organization-usages",
+    "displayName": "Organization Usage"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "monthKey": {
+      "type": "string",
+      "required": true
+    },
+    "periodStart": {
+      "type": "date",
+      "required": true
+    },
+    "periodEnd": {
+      "type": "date",
+      "required": true
+    },
+    "projectsCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "usersCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "functionalitiesCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "testCasesCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "aiUsageCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "exportUsageCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "lastRecomputedAt": {
+      "type": "datetime"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    }
+  }
+}

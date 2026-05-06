@@ -4,6 +4,7 @@ import {
   bootstrapAccessControl,
   bootstrapInitialOrganization,
   bootstrapInitialUser,
+  bootstrapSuperAdminUser,
   bootstrapOrganizationRoles,
   disablePublicRegistration,
   linkInitialMembership,
@@ -22,5 +23,6 @@ export default {
 
     const user = await bootstrapInitialUser(strapi);
     await linkInitialMembership(strapi, organization.documentId, user.id);
+    await bootstrapSuperAdminUser(strapi);
   },
 };

@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "superadmin_audit_logs",
+  "info": {
+    "singularName": "superadmin-audit-log",
+    "pluralName": "superadmin-audit-logs",
+    "displayName": "Superadmin Audit Log"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "action": {
+      "type": "string",
+      "required": true
+    },
+    "targetType": {
+      "type": "string",
+      "required": true
+    },
+    "targetDocumentId": {
+      "type": "string"
+    },
+    "targetLabel": {
+      "type": "string"
+    },
+    "details": {
+      "type": "json"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization"
+    },
+    "actor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

@@ -12,6 +12,12 @@ type InvitationEmailPayload = {
   invitationStatus?: 'new' | 'resent';
 };
 
+type PasswordRecoveryEmailPayload = {
+  recipientEmail: string;
+  username?: string;
+  resetToken: string;
+};
+
 export type InvitationEmailHealth = {
   manualShareRecommended: boolean;
   summary?: string;
@@ -102,6 +108,13 @@ export function buildInvitationAcceptanceUrl(invitationDocumentId: string) {
   }).toString()}`;
 }
 
+export function buildPasswordResetUrl(resetToken: string) {
+  const { appUrl } = getMailConfig();
+  return `${appUrl}/reset-password?${new URLSearchParams({
+    code: resetToken,
+  }).toString()}`;
+}
+
 export function getInvitationEmailHealth(): InvitationEmailHealth {
   const config = getMailConfig();
   const normalizedHost = String(config.host || '').trim().toLowerCase();
@@ -110,7 +123,7 @@ export function getInvitationEmailHealth(): InvitationEmailHealth {
     return {
       manualShareRecommended: true,
       summary:
-        'El correo de invitaciones no esta configurado en este entorno. Completa SMTP o Mailtrap Sending en Railway.',
+        'El correo de invitaciones no está configurado en este entorno. Completa SMTP o Mailtrap Sending en Railway.',
     };
   }
 
@@ -118,7 +131,7 @@ export function getInvitationEmailHealth(): InvitationEmailHealth {
     return {
       manualShareRecommended: true,
       summary:
-        'Las invitaciones estan usando Mailtrap Sandbox. Ese modo no entrega correos a Gmail ni a bandejas reales.',
+        'Las invitaciones están usando Mailtrap Sandbox. Ese modo no entrega correos a Gmail ni a bandejas reales.',
     };
   }
 
@@ -134,7 +147,7 @@ export function getInvitationEmailHealth(): InvitationEmailHealth {
     return {
       manualShareRecommended: true,
       summary:
-        'INVITATION_APP_URL aun apunta a un placeholder. Comparte el enlace manual mientras ajustas la URL final del cliente.',
+        'INVITATION_APP_URL aún apunta a un placeholder. Comparte el enlace manual mientras ajustas la URL final del cliente.',
     };
   }
 
@@ -214,32 +227,32 @@ function parseFromAddress(input: string) {
 
 function buildInvitationEmail(payload: InvitationEmailPayload) {
   const config = getMailConfig();
-  const subjectPrefix = payload.invitationStatus === 'resent' ? 'Invitacion reenviada' : 'Invitacion';
+  const subjectPrefix = payload.invitationStatus === 'resent' ? 'Invitación reenviada' : 'Invitación';
   const inviterLine = payload.inviterName || payload.inviterEmail;
   const actionCopy =
     payload.invitationStatus === 'resent'
-      ? 'Tu invitacion fue reenviada. Usa el mismo correo para completar el acceso.'
-      : 'Has sido invitado a colaborar en una organizacion de QA Tracker.';
+      ? 'Tu invitación fue reenviada. Usa el mismo correo para completar el acceso.'
+      : 'Has sido invitado a colaborar en una organización de QA Tracker.';
   const workspaceName = payload.workspaceName?.trim();
   const workspaceLogoUrl = payload.workspaceLogoUrl?.trim();
   const brandLogoUrl = config.brandLogoUrl || '';
   const ctaUrl = buildInvitationAcceptanceUrl(payload.invitationDocumentId);
-  const previewText = `${actionCopy} Organizacion: ${payload.organizationName}. Rol: ${payload.roleName}.`;
+  const previewText = `${actionCopy} Organización: ${payload.organizationName}. Rol: ${payload.roleName}.`;
 
   const text = [
     subjectPrefix,
     '',
     actionCopy,
     '',
-    `Organizacion: ${payload.organizationName}`,
+    `Organización: ${payload.organizationName}`,
     workspaceName ? `Workspace: ${workspaceName}` : '',
     `Rol sugerido: ${payload.roleName}`,
     inviterLine ? `Invitado por: ${inviterLine}` : '',
     '',
-    `Aceptar invitacion: ${ctaUrl}`,
+    `Aceptar invitación: ${ctaUrl}`,
     '',
-    'Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.',
-    'Si el boton no abre, copia y pega el enlace en tu navegador.',
+    'Si aún no tienes cuenta, regístrate con este mismo correo para que la invitación se acepte automáticamente.',
+    'Si el botón no abre, copia y pega el enlace en tu navegador.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -302,7 +315,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
                                     ${brandLogoBlock}
                                     <td valign="middle">
                                       <div style="font-size:24px;line-height:30px;font-weight:700;color:#102a43;">QA Tracker</div>
-                                      <div style="font-size:13px;line-height:20px;color:#5d748b;">Invitacion a workspace</div>
+                                      <div style="font-size:13px;line-height:20px;color:#5d748b;">Invitación a workspace</div>
                                     </td>
                                   </tr>
                                 </table>
@@ -328,7 +341,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
                               <tr>
                                 <td style="padding:0 0 14px;">
-                                  <div style="font-size:13px;line-height:20px;color:#6b7f95;">Organizacion</div>
+                                  <div style="font-size:13px;line-height:20px;color:#6b7f95;">Organización</div>
                                   <div style="font-size:16px;line-height:24px;font-weight:700;color:#102a43;">${payload.organizationName}</div>
                                 </td>
                               </tr>
@@ -355,17 +368,122 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
                               <tr>
                                 <td align="center" bgcolor="#123f68" style="border-radius:14px;">
                                   <a href="${ctaUrl}" style="display:inline-block;padding:14px 22px;font-size:15px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;">
-                                    Aceptar invitacion
+                                    Aceptar invitación
                                   </a>
                                 </td>
                               </tr>
                             </table>
                             <div style="font-size:14px;line-height:22px;color:#5d748b;margin-bottom:10px;">
-                              Si aun no tienes cuenta, registrate con este mismo correo para que la invitacion se acepte automaticamente.
+                              Si aún no tienes cuenta, regístrate con este mismo correo para que la invitación se acepte automáticamente.
                             </div>
                             <div style="font-size:12px;line-height:20px;color:#7b8ba1;word-break:break-word;">
-                              Si el boton no abre, copia este enlace en tu navegador:<br />
+                              Si el botón no abre, copia este enlace en tu navegador:<br />
                               <a href="${ctaUrl}" style="color:#123f68;text-decoration:underline;">${ctaUrl}</a>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `,
+  };
+}
+
+function buildPasswordRecoveryEmail(payload: PasswordRecoveryEmailPayload) {
+  const config = getMailConfig();
+  const resetUrl = buildPasswordResetUrl(payload.resetToken);
+  const recipientName = payload.username?.trim() || payload.recipientEmail;
+  const brandLogoUrl = config.brandLogoUrl || '';
+  const previewText = 'Recibimos una solicitud para restablecer tu contraseña en QA Tracker.';
+  const brandLogoBlock = brandLogoUrl
+    ? `
+        <td style="padding-right:16px;">
+          <img src="${brandLogoUrl}" alt="QA Tracker" width="56" height="56" style="display:block;width:56px;height:56px;border-radius:18px;object-fit:cover;box-shadow:0 12px 24px rgba(15,23,42,0.12);" />
+        </td>
+      `
+    : '';
+
+  const text = [
+    'Recuperación de contraseña',
+    '',
+    `Hola ${recipientName},`,
+    '',
+    'Recibimos una solicitud para restablecer tu contraseña en QA Tracker.',
+    'Si fuiste tú, usa este enlace para crear una nueva contraseña:',
+    resetUrl,
+    '',
+    'Si no solicitaste este cambio, puedes ignorar este mensaje.',
+  ].join('\n');
+
+  return {
+    from: config.from!,
+    to: payload.recipientEmail,
+    subject: 'Recupera tu acceso a QA Tracker',
+    text,
+    html: `
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        ${previewText}
+      </div>
+      <div style="margin:0;padding:32px 16px;background:#eef5fb;font-family:Arial,sans-serif;color:#102a43;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:680px;">
+                <tr>
+                  <td style="padding-bottom:18px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:linear-gradient(135deg,#ffffff 0%,#f5fbff 100%);border:1px solid #dbe7f3;border-radius:28px;overflow:hidden;">
+                      <tr>
+                        <td style="padding:24px 28px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="middle">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                  <tr>
+                                    ${brandLogoBlock}
+                                    <td valign="middle">
+                                      <div style="font-size:24px;line-height:30px;font-weight:700;color:#102a43;">QA Tracker</div>
+                                      <div style="font-size:13px;line-height:20px;color:#5d748b;">Recuperación de contraseña</div>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:0 28px 28px;">
+                          <div style="padding:28px;border-radius:24px;background:#ffffff;border:1px solid #e5edf5;">
+                            <div style="font-size:12px;line-height:18px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#6b7f95;margin-bottom:10px;">
+                              Recupera tu acceso
+                            </div>
+                            <div style="font-size:30px;line-height:38px;font-weight:700;color:#102a43;margin-bottom:12px;">
+                              Hola ${recipientName}
+                            </div>
+                            <div style="font-size:16px;line-height:26px;color:#365069;margin-bottom:24px;">
+                              Recibimos una solicitud para restablecer tu contraseña en QA Tracker. Si fuiste tú, crea una nueva contraseña desde este enlace seguro.
+                            </div>
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:22px;">
+                              <tr>
+                                <td align="center" bgcolor="#123f68" style="border-radius:14px;">
+                                  <a href="${resetUrl}" style="display:inline-block;padding:14px 22px;font-size:15px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;">
+                                    Restablecer contraseña
+                                  </a>
+                                </td>
+                              </tr>
+                            </table>
+                            <div style="font-size:14px;line-height:22px;color:#5d748b;margin-bottom:10px;">
+                              Si no solicitaste este cambio, puedes ignorar este mensaje y tu contraseña actual seguirá funcionando.
+                            </div>
+                            <div style="font-size:12px;line-height:20px;color:#7b8ba1;word-break:break-word;">
+                              Si el botón no abre, copia este enlace en tu navegador:<br />
+                              <a href="${resetUrl}" style="color:#123f68;text-decoration:underline;">${resetUrl}</a>
                             </div>
                           </div>
                         </td>
@@ -490,6 +608,54 @@ export async function sendOrganizationInvitationEmail(payload: InvitationEmailPa
     console.error('[mail] Invitation email failed', {
       to: payload.recipientEmail,
       invitationDocumentId: payload.invitationDocumentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+export async function sendPasswordRecoveryEmail(payload: PasswordRecoveryEmailPayload) {
+  const config = getMailConfig();
+  const message = buildPasswordRecoveryEmail(payload);
+
+  if (config.mailtrapApiToken) {
+    await sendWithMailtrapApi(
+      {
+        invitationDocumentId: payload.resetToken,
+        recipientEmail: payload.recipientEmail,
+        organizationName: 'QA Tracker',
+        roleName: 'Password recovery',
+      },
+      message,
+    );
+    return;
+  }
+
+  const transporter = getTransporter();
+
+  try {
+    console.info('[mail] Sending password recovery email', {
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      from: config.from,
+      to: payload.recipientEmail,
+      timeoutMs: config.timeoutMs,
+    });
+
+    await withTimeout(
+      transporter.sendMail(message),
+      config.timeoutMs,
+      `SMTP send timed out after ${config.timeoutMs}ms.`,
+    );
+
+    console.info('[mail] Password recovery email sent successfully', {
+      to: payload.recipientEmail,
+    });
+  } catch (error) {
+    resetTransporter();
+    console.error('[mail] Password recovery email failed', {
+      to: payload.recipientEmail,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;

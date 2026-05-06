@@ -1,17 +1,25 @@
 import type { Core } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
+import crypto from 'node:crypto';
 import {
   bootstrapOrganizationRoles,
   generateUniqueOrganizationSlug,
   linkMembershipForRole,
   linkInitialMembership,
 } from '../../../utils/bootstrap';
+import { sendPasswordRecoveryEmail } from '../../../utils/mail';
 
 type SignupInput = {
   username?: string;
   email?: string;
   password?: string;
+  passwordConfirmation?: string;
+  contactNumber?: string;
   organizationName?: string;
+};
+
+type ForgotPasswordInput = {
+  email?: string;
 };
 
 function normalizeEmail(value?: string) {
@@ -20,6 +28,31 @@ function normalizeEmail(value?: string) {
 
 function normalizeUsername(value?: string) {
   return (value || '').trim();
+}
+
+async function findUserByUsername(username: string) {
+  return strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { username },
+  });
+}
+
+async function resolveAvailableUsername(baseUsername: string) {
+  const normalizedBase = normalizeUsername(baseUsername);
+
+  if (!normalizedBase) return normalizedBase;
+
+  const existingBase = await findUserByUsername(normalizedBase);
+  if (!existingBase) return normalizedBase;
+
+  let suffix = 2;
+  while (suffix < 1000) {
+    const candidate = `${normalizedBase}-${suffix}`;
+    const existingCandidate = await findUserByUsername(candidate);
+    if (!existingCandidate) return candidate;
+    suffix += 1;
+  }
+
+  return `${normalizedBase}-${Date.now().toString().slice(-6)}`;
 }
 
 async function getAuthenticatedRole(strapi: Core.Strapi) {
@@ -50,19 +83,72 @@ async function findPendingInvitation(email: string) {
 }
 
 export default () => ({
+  async forgotPassword(payload: ForgotPasswordInput) {
+    const email = normalizeEmail(payload.email);
+
+    if (!email) {
+      throw new errors.ValidationError('Email is required.');
+    }
+
+    const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+      where: { email },
+    });
+
+    if (!user || user.blocked) {
+      return { ok: true };
+    }
+
+    const resetPasswordToken = crypto.randomBytes(64).toString('hex');
+
+    await strapi.plugin('users-permissions').service('user').edit(user.id, {
+      resetPasswordToken,
+    });
+
+    try {
+      await sendPasswordRecoveryEmail({
+        recipientEmail: user.email,
+        username: user.username,
+        resetToken: resetPasswordToken,
+      });
+    } catch (error) {
+      await strapi.plugin('users-permissions').service('user').edit(user.id, {
+        resetPasswordToken: null,
+      });
+      throw error;
+    }
+
+    return { ok: true };
+  },
+
   async signup(payload: SignupInput) {
-    const username = normalizeUsername(payload.username);
+    const requestedUsername = normalizeUsername(payload.username);
     const email = normalizeEmail(payload.email);
     const password = (payload.password || '').trim();
+    const passwordConfirmation = (payload.passwordConfirmation || '').trim();
+    const contactNumber = (payload.contactNumber || '').trim();
     const organizationName = (payload.organizationName || '').trim();
     const pendingInvitation = email ? await findPendingInvitation(email) : null;
+    let username = requestedUsername;
 
-    if (!username || !email || !password || (!organizationName && !pendingInvitation)) {
-      throw new errors.ValidationError('Username, email, password and organization name are required.');
+    if (
+      !requestedUsername ||
+      !email ||
+      !password ||
+      !passwordConfirmation ||
+      !contactNumber ||
+      (!organizationName && !pendingInvitation)
+    ) {
+      throw new errors.ValidationError(
+        'Username, email, password, password confirmation, contact number and organization name are required.',
+      );
     }
 
     if (password.length < 6) {
       throw new errors.ValidationError('Password must be at least 6 characters long.');
+    }
+
+    if (password !== passwordConfirmation) {
+      throw new errors.ValidationError('Password confirmation does not match.');
     }
 
     const authenticatedRole = await getAuthenticatedRole(strapi);
@@ -78,11 +164,13 @@ export default () => ({
       throw new errors.ApplicationError('Email is already in use.');
     }
 
-    const existingByUsername = await strapi.db.query('plugin::users-permissions.user').findOne({
-      where: { username },
-    });
+    const existingByUsername = await findUserByUsername(username);
     if (existingByUsername) {
-      throw new errors.ApplicationError('Username is already in use.');
+      if (!pendingInvitation) {
+        throw new errors.ApplicationError('Username is already in use.');
+      }
+
+      username = await resolveAvailableUsername(username);
     }
 
     let createdUser: { id: number; username?: string; email?: string } | null = null;
@@ -94,6 +182,7 @@ export default () => ({
         email,
         provider: 'local',
         password,
+        contactNumber,
         confirmed: true,
         blocked: false,
         role: authenticatedRole.id,
@@ -130,6 +219,17 @@ export default () => ({
             slug,
             plan: 'starter',
             status: 'active',
+            planStatus: 'active',
+            planUpdatedAt: new Date().toISOString(),
+            aiUsageThisMonth: 0,
+            aiResetAt: null,
+            aiLimit: null,
+            exportUsageThisMonth: 0,
+            usageResetAt: null,
+            exportLimitMonthly: null,
+            billingNotes: null,
+            planExpiresAt: null,
+            gracePeriodEndsAt: null,
           },
         });
 

@@ -1,6 +1,6 @@
 import type { Core } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
-import { getUserMemberships } from '../utils/tenant';
+import { getUserMembershipAccessError, getUserMemberships } from '../utils/tenant';
 
 type PolicyContext = {
   state: {
@@ -24,7 +24,7 @@ export default async (
   const memberships = await getUserMemberships(strapi, user.id);
 
   if (memberships.length === 0) {
-    throw new errors.ForbiddenError('An active organization membership is required.');
+    throw new errors.ForbiddenError(await getUserMembershipAccessError(strapi, user.id));
   }
 
   return true;

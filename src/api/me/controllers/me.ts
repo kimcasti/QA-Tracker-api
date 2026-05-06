@@ -1,4 +1,10 @@
 export default {
+  async organizationUsage(ctx) {
+    const data = await strapi.service('api::me.me').organizationUsage(ctx.state.user.id);
+
+    ctx.body = { data };
+  },
+
   async projectContexts(ctx) {
     const data = await strapi.service('api::me.me').projectContexts(ctx.state.user.id);
 

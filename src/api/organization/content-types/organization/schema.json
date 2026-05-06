@@ -30,6 +30,43 @@
       "enum": ["starter", "growth", "enterprise"],
       "default": "starter"
     },
+    "planStatus": {
+      "type": "enumeration",
+      "enum": ["active", "past_due", "canceled"],
+      "default": "active"
+    },
+    "planExpiresAt": {
+      "type": "datetime"
+    },
+    "gracePeriodEndsAt": {
+      "type": "datetime"
+    },
+    "planUpdatedAt": {
+      "type": "datetime"
+    },
+    "aiUsageThisMonth": {
+      "type": "integer",
+      "default": 0
+    },
+    "aiResetAt": {
+      "type": "datetime"
+    },
+    "aiLimit": {
+      "type": "integer"
+    },
+    "exportUsageThisMonth": {
+      "type": "integer",
+      "default": 0
+    },
+    "usageResetAt": {
+      "type": "datetime"
+    },
+    "exportLimitMonthly": {
+      "type": "integer"
+    },
+    "billingNotes": {
+      "type": "text"
+    },
     "memberships": {
       "type": "relation",
       "relation": "oneToMany",

@@ -1,9 +1,9 @@
 export default {
   routes: [
     {
-      method: 'GET',
-      path: '/slack/members',
-      handler: 'slack.members',
+      method: 'POST',
+      path: '/billing/upgrade-request',
+      handler: 'billing-request.requestUpgrade',
       config: {
         auth: {},
         policies: ['global::has-active-membership'],

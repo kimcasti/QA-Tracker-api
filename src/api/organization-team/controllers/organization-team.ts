@@ -1,10 +1,17 @@
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
+import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
 import {
   buildInvitationAcceptanceUrl,
   getInvitationEmailHealth,
   sendOrganizationInvitationEmail,
 } from '../../../utils/mail';
+import {
+  countActiveMembershipsForUser,
+  setUserBlockedState,
+  syncUserAccessState,
+  toNumericUserId,
+} from '../../../utils/organization-membership-admin';
 import { getUserMemberships } from '../../../utils/tenant';
 
 const TEAM_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'viewer'] as const;
@@ -27,19 +34,6 @@ function normalizeEmail(value: unknown) {
 function roleOrderIndex(code?: string) {
   const index = TEAM_ROLE_CODES.indexOf((code || '') as TeamRoleCode);
   return index === -1 ? TEAM_ROLE_CODES.length : index;
-}
-
-function toNumericUserId(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
 }
 
 async function getOrganizationDbId(documentId: string) {
@@ -67,39 +61,6 @@ async function getRoleDbRecord(roleDocumentId: string, organizationDocumentId: s
       documentId: role.documentId,
     },
   });
-}
-
-async function countActiveMembershipsForUser(userId: number) {
-  const memberships = await strapi.db
-    .query('api::organization-membership.organization-membership')
-    .findMany({
-      where: {
-        user: userId,
-        isActive: true,
-      },
-    });
-
-  return memberships.length;
-}
-
-async function setUserBlockedState(userId: number, blocked: boolean) {
-  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
-    where: { id: userId },
-  });
-
-  if (!user?.id || Boolean(user.blocked) === blocked) {
-    return;
-  }
-
-  await strapi.db.query('plugin::users-permissions.user').update({
-    where: { id: userId },
-    data: { blocked },
-  });
-}
-
-async function syncUserAccessState(userId: number) {
-  const activeMemberships = await countActiveMembershipsForUser(userId);
-  await setUserBlockedState(userId, activeMemberships === 0);
 }
 
 async function getActiveTeamContext(userId: number): Promise<TeamContext> {
@@ -437,6 +398,12 @@ export default {
     if (duplicateInvitation) {
       throw new errors.ValidationError('There is already a pending invitation for this email.');
     }
+
+    await assertOrganizationLimitAvailable({
+      organizationDocumentId: teamContext.organizationDocumentId,
+      limitKey: 'users',
+      resourceLabel: 'usuarios',
+    });
 
     const organizationId = await getOrganizationDbId(teamContext.organizationDocumentId);
 

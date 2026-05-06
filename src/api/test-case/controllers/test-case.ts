@@ -1,5 +1,6 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
+import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
 import {
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
@@ -202,6 +203,11 @@ export default factories.createCoreController('api::test-case.test-case', () => 
     }
 
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
+    await assertOrganizationLimitAvailable({
+      organizationDocumentId,
+      limitKey: 'testCases',
+      resourceLabel: 'casos de prueba',
+    });
 
     const created = await strapi.documents('api::test-case.test-case').create({
       data: {

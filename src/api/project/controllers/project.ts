@@ -1,12 +1,11 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES } from '../../../utils/access';
+import { getEffectivePlan } from '../../../utils/subscription';
 import {
-  PRO_PLAN_PRICE_MONTHLY_USD,
-  STARTER_PROJECT_LIMIT,
-  getProjectLimitForPlan,
-  normalizeOrganizationPlan,
-} from '../../../utils/subscription';
+  assertOrganizationFeatureAvailable,
+  assertOrganizationLimitAvailable,
+} from '../../../utils/plan-enforcement';
 import { getUserMemberships } from '../../../utils/tenant';
 
 type ProjectPayload = {
@@ -59,6 +58,10 @@ function normalizeProjectData(payload: ProjectPayload) {
     aiProjectInsights: payload.aiProjectInsights || '',
     aiWireframeBrief: payload.aiWireframeBrief || '',
   };
+}
+
+function hasAiProjectPayload(payload: ProjectPayload) {
+  return Boolean(payload.aiProjectInsights?.trim() || payload.aiWireframeBrief?.trim());
 }
 
 async function ensureProjectAccess(userId: number, projectDocumentId: string) {
@@ -137,26 +140,17 @@ async function ensureProjectCreationAllowed(userId: number, requestedOrganizatio
     throw new errors.NotFoundError('Organization not found.');
   }
 
-  const plan = normalizeOrganizationPlan(organization.plan);
-  const projectLimit = getProjectLimitForPlan(plan);
+  const plan = getEffectivePlan(organization);
+  await assertOrganizationLimitAvailable({
+    organizationDocumentId,
+    limitKey: 'projects',
+    resourceLabel: 'proyectos',
+  });
 
-  if (projectLimit !== null) {
-    const existingProjects = await strapi.documents('api::project.project').findMany({
-      filters: {
-        organization: {
-          documentId: organizationDocumentId,
-        },
-      },
-    });
-
-    if (existingProjects.length >= projectLimit) {
-      throw new errors.ForbiddenError(
-        `Tu organización alcanzó el límite de ${STARTER_PROJECT_LIMIT} proyectos del plan Starter. Actualiza a Pro por $${PRO_PLAN_PRICE_MONTHLY_USD}/mes para seguir creando proyectos.`,
-      );
-    }
-  }
-
-  return organizationDocumentId;
+  return {
+    organizationDocumentId,
+    plan,
+  };
 }
 
 export default factories.createCoreController('api::project.project', () => ({
@@ -168,7 +162,18 @@ export default factories.createCoreController('api::project.project', () => ({
     }
 
     const payload = (ctx.request.body?.data || {}) as ProjectPayload;
-    const organizationDocumentId = await ensureProjectCreationAllowed(userId, payload.organization);
+    const { organizationDocumentId, plan } = await ensureProjectCreationAllowed(
+      userId,
+      payload.organization,
+    );
+
+    if (hasAiProjectPayload(payload)) {
+      await assertOrganizationFeatureAvailable({
+        organizationDocumentId,
+        feature: 'ai',
+        featureLabel: 'funciones de IA para guardar insights o briefs generados',
+      });
+    }
 
     const created = await strapi.documents('api::project.project').create({
       data: {
@@ -211,6 +216,23 @@ export default factories.createCoreController('api::project.project', () => ({
       userId,
       existing.organization?.documentId || payload.organization,
     );
+    const organization = await strapi.documents('api::organization.organization').findOne({
+      documentId: organizationDocumentId,
+    });
+
+    if (!organization?.documentId) {
+      throw new errors.NotFoundError('Organization not found.');
+    }
+
+    const plan = getEffectivePlan(organization);
+
+    if (hasAiProjectPayload(payload)) {
+      await assertOrganizationFeatureAvailable({
+        organizationDocumentId,
+        feature: 'ai',
+        featureLabel: 'funciones de IA para guardar insights o briefs generados',
+      });
+    }
 
     const updated = await strapi.documents('api::project.project').update({
       documentId,

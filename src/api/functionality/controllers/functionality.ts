@@ -1,5 +1,6 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
+import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
 import {
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
@@ -9,6 +10,7 @@ import {
 type FunctionalityPayload = {
   code?: string;
   name?: string;
+  jiraTaskUrl?: string | null;
   testTypes?: unknown;
   isCore?: boolean;
   isRegression?: boolean;
@@ -82,6 +84,7 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
   const data: Record<string, unknown> = {
     code: payload.code || '',
     name: payload.name || '',
+    jiraTaskUrl: payload.jiraTaskUrl?.trim() || null,
     testTypes: Array.isArray(payload.testTypes) ? payload.testTypes : [],
     isCore: Boolean(payload.isCore),
     isRegression: Boolean(payload.isRegression),
@@ -195,6 +198,11 @@ export default factories.createCoreController('api::functionality.functionality'
     }
 
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
+    await assertOrganizationLimitAvailable({
+      organizationDocumentId,
+      limitKey: 'features',
+      resourceLabel: 'funcionalidades',
+    });
 
     const created = await strapi.documents('api::functionality.functionality').create({
       data: {

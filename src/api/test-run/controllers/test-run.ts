@@ -16,6 +16,12 @@ type TestRunPayload = {
   tester?: string | null;
   buildVersion?: string | null;
   environment?: 'test' | 'local' | 'production';
+  browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | null;
+  deviceType?: 'desktop' | 'mobile' | 'tablet' | null;
+  operatingSystem?: 'windows' | 'macos' | 'linux' | 'android' | 'ios' | null;
+  browserVersion?: string | null;
+  osVersion?: string | null;
+  resolution?: string | null;
   selectedModules?: unknown;
   selectedFunctionalities?: unknown;
   organization?: unknown;
@@ -91,6 +97,12 @@ function buildTestRunData(payload: TestRunPayload, sprintDocumentId?: string | n
     tester: payload.tester || null,
     buildVersion: payload.buildVersion || null,
     environment: payload.environment || null,
+    browser: payload.browser || null,
+    deviceType: payload.deviceType || null,
+    operatingSystem: payload.operatingSystem || null,
+    browserVersion: payload.browserVersion || null,
+    osVersion: payload.osVersion || null,
+    resolution: payload.resolution || null,
     selectedModules: Array.isArray(payload.selectedModules) ? payload.selectedModules : [],
     selectedFunctionalities: Array.isArray(payload.selectedFunctionalities)
       ? payload.selectedFunctionalities

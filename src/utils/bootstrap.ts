@@ -119,6 +119,17 @@ export async function bootstrapInitialOrganization(
       slug,
       plan,
       status: 'active',
+      planStatus: 'active',
+      planUpdatedAt: new Date().toISOString(),
+      aiUsageThisMonth: 0,
+      aiResetAt: null,
+      aiLimit: null,
+      exportUsageThisMonth: 0,
+      usageResetAt: null,
+      exportLimitMonthly: null,
+      billingNotes: null,
+      planExpiresAt: null,
+      gracePeriodEndsAt: null,
     },
   });
 
@@ -164,6 +175,7 @@ export async function bootstrapInitialUser(strapi: Core.Strapi) {
   const email = process.env.INITIAL_USER_EMAIL?.trim() || 'admin@qatracker.local';
   const username = process.env.INITIAL_USER_USERNAME?.trim() || 'admin';
   const password = process.env.INITIAL_USER_PASSWORD?.trim() || 'ChangeMe123!';
+  const shouldBeSuperAdmin = (process.env.INITIAL_USER_IS_SUPERADMIN?.trim() || 'false') === 'true';
 
   const existing = await strapi.db.query('plugin::users-permissions.user').findOne({
     where: { email },
@@ -171,10 +183,13 @@ export async function bootstrapInitialUser(strapi: Core.Strapi) {
   });
 
   if (existing) {
-    if (!existing.provider) {
+    if (!existing.provider || existing.isSuperAdmin !== shouldBeSuperAdmin) {
       return strapi.db.query('plugin::users-permissions.user').update({
         where: { id: existing.id },
-        data: { provider: 'local' },
+        data: {
+          provider: existing.provider || 'local',
+          isSuperAdmin: shouldBeSuperAdmin,
+        },
         populate: ['role'],
       });
     }
@@ -188,6 +203,54 @@ export async function bootstrapInitialUser(strapi: Core.Strapi) {
     password,
     confirmed: true,
     blocked: false,
+    isSuperAdmin: shouldBeSuperAdmin,
+    role: authenticatedRole.id,
+  });
+}
+
+export async function bootstrapSuperAdminUser(strapi: Core.Strapi) {
+  const authenticatedRole = await getAuthenticatedRole(strapi);
+
+  if (!authenticatedRole) {
+    throw new Error('Authenticated users-permissions role is required before creating superadmin user.');
+  }
+
+  const email = process.env.SUPERADMIN_EMAIL?.trim();
+  const username = process.env.SUPERADMIN_USERNAME?.trim();
+  const password = process.env.SUPERADMIN_PASSWORD?.trim();
+
+  if (!email || !username || !password) {
+    return null;
+  }
+
+  const existing = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { email },
+    populate: ['role'],
+  });
+
+  if (existing) {
+    if (!existing.provider || existing.isSuperAdmin !== true) {
+      return strapi.db.query('plugin::users-permissions.user').update({
+        where: { id: existing.id },
+        data: {
+          provider: existing.provider || 'local',
+          isSuperAdmin: true,
+        },
+        populate: ['role'],
+      });
+    }
+
+    return existing;
+  }
+
+  return strapi.plugin('users-permissions').service('user').add({
+    username,
+    email,
+    provider: 'local',
+    password,
+    confirmed: true,
+    blocked: false,
+    isSuperAdmin: true,
     role: authenticatedRole.id,
   });
 }
@@ -336,6 +399,17 @@ export async function ensureUserWorkspace(strapi: Core.Strapi, userId: number) {
       slug,
       plan: 'starter',
       status: 'active',
+      planStatus: 'active',
+      planUpdatedAt: new Date().toISOString(),
+      aiUsageThisMonth: 0,
+      aiResetAt: null,
+      aiLimit: null,
+      exportUsageThisMonth: 0,
+      usageResetAt: null,
+      exportLimitMonthly: null,
+      billingNotes: null,
+      planExpiresAt: null,
+      gracePeriodEndsAt: null,
     },
   });
 

@@ -2,6 +2,15 @@ export default {
   routes: [
     {
       method: 'GET',
+      path: '/me/organization-usage',
+      handler: 'me.organizationUsage',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
+    {
+      method: 'GET',
       path: '/me/project-contexts',
       handler: 'me.projectContexts',
       config: {

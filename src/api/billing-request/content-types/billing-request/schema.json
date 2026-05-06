@@ -1,0 +1,70 @@
+{
+  "kind": "collectionType",
+  "collectionName": "billing_requests",
+  "info": {
+    "singularName": "billing-request",
+    "pluralName": "billing-requests",
+    "displayName": "Billing Request"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "requestedPlan": {
+      "type": "enumeration",
+      "enum": ["growth", "enterprise"],
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "contacted", "approved", "rejected", "fulfilled"],
+      "default": "pending"
+    },
+    "statusNotes": {
+      "type": "text"
+    },
+    "handledAt": {
+      "type": "datetime"
+    },
+    "source": {
+      "type": "string"
+    },
+    "requestedAt": {
+      "type": "datetime"
+    },
+    "currentCount": {
+      "type": "integer"
+    },
+    "limitValue": {
+      "type": "integer"
+    },
+    "priceMonthlyUsd": {
+      "type": "decimal"
+    },
+    "paymentMethod": {
+      "type": "enumeration",
+      "enum": ["manual_transfer", "nequi", "whatsapp", "wompi", "mercadopago", "other"]
+    },
+    "externalReference": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization"
+    },
+    "requestedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "handledBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

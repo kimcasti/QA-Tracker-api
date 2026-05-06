@@ -430,6 +430,64 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiBillingRequestBillingRequest
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'billing_requests';
+  info: {
+    displayName: 'Billing Request';
+    pluralName: 'billing-requests';
+    singularName: 'billing-request';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentCount: Schema.Attribute.Integer;
+    externalReference: Schema.Attribute.String;
+    handledAt: Schema.Attribute.DateTime;
+    handledBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    limitValue: Schema.Attribute.Integer;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::billing-request.billing-request'
+    > &
+      Schema.Attribute.Private;
+    notes: Schema.Attribute.Text;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    >;
+    paymentMethod: Schema.Attribute.Enumeration<
+      ['manual_transfer', 'nequi', 'whatsapp', 'wompi', 'mercadopago', 'other']
+    >;
+    priceMonthlyUsd: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    requestedAt: Schema.Attribute.DateTime;
+    requestedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    requestedPlan: Schema.Attribute.Enumeration<['growth', 'enterprise']> &
+      Schema.Attribute.Required;
+    source: Schema.Attribute.String;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'contacted', 'approved', 'rejected', 'fulfilled']
+    > &
+      Schema.Attribute.DefaultTo<'pending'>;
+    statusNotes: Schema.Attribute.Text;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiBugBug extends Struct.CollectionTypeSchema {
   collectionName: 'bugs';
   info: {
@@ -500,6 +558,46 @@ export interface ApiBugBug extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiExternalParticipantExternalParticipant
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'external_participants';
+  info: {
+    displayName: 'External Participant';
+    pluralName: 'external-participants';
+    singularName: 'external-participant';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    email: Schema.Attribute.Email;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::external-participant.external-participant'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    role: Schema.Attribute.String;
+    sourceProject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project.project'
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiFunctionalityFunctionality
   extends Struct.CollectionTypeSchema {
   collectionName: 'functionalities';
@@ -520,6 +618,7 @@ export interface ApiFunctionalityFunctionality
     isCore: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isRegression: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isSmoke: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    jiraTaskUrl: Schema.Attribute.String;
     lastFunctionalChangeAt: Schema.Attribute.Date;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -742,6 +841,50 @@ export interface ApiOrganizationRoleOrganizationRole
   };
 }
 
+export interface ApiOrganizationUsageOrganizationUsage
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'organization_usages';
+  info: {
+    displayName: 'Organization Usage';
+    pluralName: 'organization-usages';
+    singularName: 'organization-usage';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    aiUsageCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    exportUsageCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    functionalitiesCount: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    lastRecomputedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::organization-usage.organization-usage'
+    > &
+      Schema.Attribute.Private;
+    monthKey: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    periodEnd: Schema.Attribute.Date & Schema.Attribute.Required;
+    periodStart: Schema.Attribute.Date & Schema.Attribute.Required;
+    projectsCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    testCasesCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    usersCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+  };
+}
+
 export interface ApiOrganizationOrganization
   extends Struct.CollectionTypeSchema {
   collectionName: 'organizations';
@@ -754,9 +897,17 @@ export interface ApiOrganizationOrganization
     draftAndPublish: false;
   };
   attributes: {
+    aiLimit: Schema.Attribute.Integer;
+    aiResetAt: Schema.Attribute.DateTime;
+    aiUsageThisMonth: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    billingNotes: Schema.Attribute.Text;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    exportLimitMonthly: Schema.Attribute.Integer;
+    exportUsageThisMonth: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    gracePeriodEndsAt: Schema.Attribute.DateTime;
     invitations: Schema.Attribute.Relation<
       'oneToMany',
       'api::organization-invitation.organization-invitation'
@@ -778,6 +929,12 @@ export interface ApiOrganizationOrganization
     name: Schema.Attribute.String & Schema.Attribute.Required;
     plan: Schema.Attribute.Enumeration<['starter', 'growth', 'enterprise']> &
       Schema.Attribute.DefaultTo<'starter'>;
+    planExpiresAt: Schema.Attribute.DateTime;
+    planStatus: Schema.Attribute.Enumeration<
+      ['active', 'past_due', 'canceled']
+    > &
+      Schema.Attribute.DefaultTo<'active'>;
+    planUpdatedAt: Schema.Attribute.DateTime;
     projects: Schema.Attribute.Relation<'oneToMany', 'api::project.project'>;
     publishedAt: Schema.Attribute.DateTime;
     roles: Schema.Attribute.Relation<
@@ -796,6 +953,7 @@ export interface ApiOrganizationOrganization
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    usageResetAt: Schema.Attribute.DateTime;
   };
 }
 
@@ -1087,6 +1245,115 @@ export interface ApiSprintSprint extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSubscriptionEventSubscriptionEvent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'subscription_events';
+  info: {
+    displayName: 'Subscription Event';
+    pluralName: 'subscription-events';
+    singularName: 'subscription-event';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    changedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    effectiveAt: Schema.Attribute.DateTime;
+    eventType: Schema.Attribute.Enumeration<
+      [
+        'upgrade_requested',
+        'plan_upgraded',
+        'plan_renewed',
+        'marked_past_due',
+        'grace_started',
+        'downgraded_to_starter',
+        'plan_canceled',
+        'manual_adjustment',
+      ]
+    > &
+      Schema.Attribute.Required;
+    externalReference: Schema.Attribute.String;
+    gracePeriodEndsAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subscription-event.subscription-event'
+    > &
+      Schema.Attribute.Private;
+    nextPlan: Schema.Attribute.Enumeration<['starter', 'growth', 'enterprise']>;
+    nextPlanStatus: Schema.Attribute.Enumeration<
+      ['active', 'past_due', 'canceled']
+    >;
+    notes: Schema.Attribute.Text;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    paymentMethod: Schema.Attribute.Enumeration<
+      ['manual_transfer', 'nequi', 'whatsapp', 'wompi', 'mercadopago', 'other']
+    >;
+    planExpiresAt: Schema.Attribute.DateTime;
+    previousPlan: Schema.Attribute.Enumeration<
+      ['starter', 'growth', 'enterprise']
+    >;
+    previousPlanStatus: Schema.Attribute.Enumeration<
+      ['active', 'past_due', 'canceled']
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSuperadminAuditLogSuperadminAuditLog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'superadmin_audit_logs';
+  info: {
+    displayName: 'Superadmin Audit Log';
+    pluralName: 'superadmin-audit-logs';
+    singularName: 'superadmin-audit-log';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    action: Schema.Attribute.String & Schema.Attribute.Required;
+    actor: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    details: Schema.Attribute.JSON;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::superadmin-audit-log.superadmin-audit-log'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    targetDocumentId: Schema.Attribute.String;
+    targetLabel: Schema.Attribute.String;
+    targetType: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiTestCaseTemplateTestCaseTemplate
   extends Struct.CollectionTypeSchema {
   collectionName: 'test_case_templates';
@@ -1292,6 +1559,10 @@ export interface ApiTestCycleTestCycle extends Struct.CollectionTypeSchema {
   };
   attributes: {
     blocked: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    browser: Schema.Attribute.Enumeration<
+      ['chrome', 'firefox', 'edge', 'safari']
+    >;
+    browserVersion: Schema.Attribute.String;
     buildVersion: Schema.Attribute.String;
     code: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
@@ -1300,6 +1571,7 @@ export interface ApiTestCycleTestCycle extends Struct.CollectionTypeSchema {
     cycleType: Schema.Attribute.Enumeration<['regression', 'smoke']> &
       Schema.Attribute.Required;
     date: Schema.Attribute.Date & Schema.Attribute.Required;
+    deviceType: Schema.Attribute.Enumeration<['desktop', 'mobile', 'tablet']>;
     environment: Schema.Attribute.Enumeration<['test', 'local', 'production']>;
     executions: Schema.Attribute.Relation<
       'oneToMany',
@@ -1313,17 +1585,22 @@ export interface ApiTestCycleTestCycle extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     note: Schema.Attribute.Text;
+    operatingSystem: Schema.Attribute.Enumeration<
+      ['windows', 'macos', 'linux', 'android', 'ios']
+    >;
     organization: Schema.Attribute.Relation<
       'manyToOne',
       'api::organization.organization'
     > &
       Schema.Attribute.Required;
+    osVersion: Schema.Attribute.String;
     passed: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     passRate: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     pending: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    resolution: Schema.Attribute.String;
     sprint: Schema.Attribute.Relation<'manyToOne', 'api::sprint.sprint'>;
     status: Schema.Attribute.Enumeration<['completed', 'in_progress']> &
       Schema.Attribute.DefaultTo<'in_progress'>;
@@ -1469,11 +1746,16 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    browser: Schema.Attribute.Enumeration<
+      ['chrome', 'firefox', 'edge', 'safari']
+    >;
+    browserVersion: Schema.Attribute.String;
     buildVersion: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     description: Schema.Attribute.Text;
+    deviceType: Schema.Attribute.Enumeration<['desktop', 'mobile', 'tablet']>;
     environment: Schema.Attribute.Enumeration<['test', 'local', 'production']>;
     executionDate: Schema.Attribute.Date;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
@@ -1482,11 +1764,15 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
       'api::test-run.test-run'
     > &
       Schema.Attribute.Private;
+    operatingSystem: Schema.Attribute.Enumeration<
+      ['windows', 'macos', 'linux', 'android', 'ios']
+    >;
     organization: Schema.Attribute.Relation<
       'manyToOne',
       'api::organization.organization'
     > &
       Schema.Attribute.Required;
+    osVersion: Schema.Attribute.String;
     priority: Schema.Attribute.Enumeration<
       ['critical', 'high', 'medium', 'low']
     > &
@@ -1494,6 +1780,7 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    resolution: Schema.Attribute.String;
     results: Schema.Attribute.Relation<
       'oneToMany',
       'api::test-run-result.test-run-result'
@@ -1985,6 +2272,7 @@ export interface PluginUsersPermissionsUser
     blocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     confirmationToken: Schema.Attribute.String & Schema.Attribute.Private;
     confirmed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    contactNumber: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1993,6 +2281,7 @@ export interface PluginUsersPermissionsUser
       Schema.Attribute.SetMinMaxLength<{
         minLength: 6;
       }>;
+    isSuperAdmin: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -2034,12 +2323,15 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::billing-request.billing-request': ApiBillingRequestBillingRequest;
       'api::bug.bug': ApiBugBug;
+      'api::external-participant.external-participant': ApiExternalParticipantExternalParticipant;
       'api::functionality.functionality': ApiFunctionalityFunctionality;
       'api::meeting-note.meeting-note': ApiMeetingNoteMeetingNote;
       'api::organization-invitation.organization-invitation': ApiOrganizationInvitationOrganizationInvitation;
       'api::organization-membership.organization-membership': ApiOrganizationMembershipOrganizationMembership;
       'api::organization-role.organization-role': ApiOrganizationRoleOrganizationRole;
+      'api::organization-usage.organization-usage': ApiOrganizationUsageOrganizationUsage;
       'api::organization.organization': ApiOrganizationOrganization;
       'api::personal-note.personal-note': ApiPersonalNotePersonalNote;
       'api::project-module.project-module': ApiProjectModuleProjectModule;
@@ -2047,6 +2339,8 @@ declare module '@strapi/strapi' {
       'api::project-story-map.project-story-map': ApiProjectStoryMapProjectStoryMap;
       'api::project.project': ApiProjectProject;
       'api::sprint.sprint': ApiSprintSprint;
+      'api::subscription-event.subscription-event': ApiSubscriptionEventSubscriptionEvent;
+      'api::superadmin-audit-log.superadmin-audit-log': ApiSuperadminAuditLogSuperadminAuditLog;
       'api::test-case-template.test-case-template': ApiTestCaseTemplateTestCaseTemplate;
       'api::test-case.test-case': ApiTestCaseTestCase;
       'api::test-cycle-execution.test-cycle-execution': ApiTestCycleExecutionTestCycleExecution;

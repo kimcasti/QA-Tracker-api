@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
+  getUserMembershipAccessError,
   getAllowedAccessRoleCodes,
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromEntity,
@@ -51,7 +52,7 @@ export default async (
   const membershipRoleCodes = getAllowedAccessRoleCodes(memberships);
 
   if (allowedOrganizationDocumentIds.length === 0) {
-    throw new errors.ForbiddenError('An active organization membership is required.');
+    throw new errors.ForbiddenError(await getUserMembershipAccessError(strapi, user.id));
   }
 
   const allowedRoles = config.allowedRoles ?? [];

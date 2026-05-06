@@ -45,7 +45,7 @@ type BatchExecutionSyncPayload = {
   items?: BatchExecutionSyncItem[] | null;
 };
 
-type SlackDirectoryMember = {
+type ParticipantDirectoryMember = {
   email?: string | null;
   username?: string | null;
   fullName?: string | null;
@@ -134,7 +134,8 @@ function addEmailIdentity(target: Set<string>, value?: string | null) {
   }
 }
 
-async function resolveSlackMemberForUser(
+async function resolveParticipantDirectoryMemberForUser(
+  userId: number,
   userEmail?: string | null,
   userUsername?: string | null,
 ) {
@@ -146,7 +147,9 @@ async function resolveSlackMemberForUser(
   }
 
   try {
-    const members = (await strapi.service('api::slack.slack').members()) as SlackDirectoryMember[];
+    const members = (await strapi
+      .service('api::participant-directory.participant-directory')
+      .members(userId)) as ParticipantDirectoryMember[];
 
     return (
       members.find(member => {
@@ -167,7 +170,7 @@ async function resolveSlackMemberForUser(
       }) || null
     );
   } catch (error) {
-    strapi.log.warn('Unable to resolve Slack member for execution access checks.');
+    strapi.log.warn('Unable to resolve participant directory member for execution access checks.');
     return null;
   }
 }
@@ -580,12 +583,16 @@ async function getCurrentExecutionAccessContext(
   addComparableIdentity(identityKeys, user?.username);
 
   if (normalizeComparableValue(assignedTesterName)) {
-    const slackMember = await resolveSlackMemberForUser(user?.email, user?.username);
-    addEmailIdentity(identityKeys, slackMember?.email);
-    addComparableIdentity(identityKeys, slackMember?.username);
-    addComparableIdentity(identityKeys, slackMember?.fullName);
-    addComparableIdentity(identityKeys, slackMember?.displayName);
-    addComparableIdentity(identityKeys, slackMember?.realName);
+    const directoryMember = await resolveParticipantDirectoryMemberForUser(
+      userId,
+      user?.email,
+      user?.username,
+    );
+    addEmailIdentity(identityKeys, directoryMember?.email);
+    addComparableIdentity(identityKeys, directoryMember?.username);
+    addComparableIdentity(identityKeys, directoryMember?.fullName);
+    addComparableIdentity(identityKeys, directoryMember?.displayName);
+    addComparableIdentity(identityKeys, directoryMember?.realName);
   }
 
   return {

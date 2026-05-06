@@ -45,6 +45,27 @@
       "type": "enumeration",
       "enum": ["test", "local", "production"]
     },
+    "browser": {
+      "type": "enumeration",
+      "enum": ["chrome", "firefox", "edge", "safari"]
+    },
+    "deviceType": {
+      "type": "enumeration",
+      "enum": ["desktop", "mobile", "tablet"]
+    },
+    "operatingSystem": {
+      "type": "enumeration",
+      "enum": ["windows", "macos", "linux", "android", "ios"]
+    },
+    "browserVersion": {
+      "type": "string"
+    },
+    "osVersion": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
     "selectedModules": {
       "type": "json"
     },

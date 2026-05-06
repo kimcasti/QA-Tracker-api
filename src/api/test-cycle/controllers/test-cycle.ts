@@ -22,6 +22,12 @@ type TestCyclePayload = {
   tester?: string | null;
   buildVersion?: string | null;
   environment?: 'test' | 'local' | 'production' | null;
+  browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | null;
+  deviceType?: 'desktop' | 'mobile' | 'tablet' | null;
+  operatingSystem?: 'windows' | 'macos' | 'linux' | 'android' | 'ios' | null;
+  browserVersion?: string | null;
+  osVersion?: string | null;
+  resolution?: string | null;
   organization?: unknown;
   project?: unknown;
   sprint?: unknown;
@@ -66,6 +72,12 @@ function buildTestCycleData(payload: TestCyclePayload) {
     tester: payload.tester || null,
     buildVersion: payload.buildVersion || null,
     environment: payload.environment || null,
+    browser: payload.browser || null,
+    deviceType: payload.deviceType || null,
+    operatingSystem: payload.operatingSystem || null,
+    browserVersion: payload.browserVersion || null,
+    osVersion: payload.osVersion || null,
+    resolution: payload.resolution || null,
   };
 
   if (hasOwnProperty(payload, 'sprint')) {
@@ -125,6 +137,18 @@ function hasCycleConfigurationChanges(
   const nextEnvironment = normalizeComparableString(
     payload.environment ?? existing.environment,
   );
+  const nextBrowser = normalizeComparableString(payload.browser ?? existing.browser);
+  const nextDeviceType = normalizeComparableString(
+    payload.deviceType ?? existing.deviceType,
+  );
+  const nextOperatingSystem = normalizeComparableString(
+    payload.operatingSystem ?? existing.operatingSystem,
+  );
+  const nextBrowserVersion = normalizeComparableString(
+    payload.browserVersion ?? existing.browserVersion,
+  );
+  const nextOsVersion = normalizeComparableString(payload.osVersion ?? existing.osVersion);
+  const nextResolution = normalizeComparableString(payload.resolution ?? existing.resolution);
   const nextSprint = normalizeComparableString(
     nextSprintDocumentId ?? existing.sprint?.documentId,
   );
@@ -136,6 +160,12 @@ function hasCycleConfigurationChanges(
     nextTester !== normalizeComparableString(existing.tester) ||
     nextBuildVersion !== normalizeComparableString(existing.buildVersion) ||
     nextEnvironment !== normalizeComparableString(existing.environment) ||
+    nextBrowser !== normalizeComparableString(existing.browser) ||
+    nextDeviceType !== normalizeComparableString(existing.deviceType) ||
+    nextOperatingSystem !== normalizeComparableString(existing.operatingSystem) ||
+    nextBrowserVersion !== normalizeComparableString(existing.browserVersion) ||
+    nextOsVersion !== normalizeComparableString(existing.osVersion) ||
+    nextResolution !== normalizeComparableString(existing.resolution) ||
     nextSprint !== normalizeComparableString(existing.sprint?.documentId)
   );
 }
@@ -164,9 +194,7 @@ async function ensureCycleAdminAccess(
   );
 
   if (!membership || !ADMIN_ROLES.includes((membership.organizationRole?.code || '') as any)) {
-    throw new errors.ForbiddenError(
-      'Only Owner or QA Lead can edit or reopen regression and smoke cycles.',
-    );
+    throw new errors.ForbiddenError('Only Owner or QA Lead can edit regression and smoke cycles.');
   }
 }
 
@@ -185,6 +213,24 @@ async function ensureCycleOwnerAccess(
 
   if (!membership || !OWNER_ROLES.includes((membership.organizationRole?.code || '') as any)) {
     throw new errors.ForbiddenError('Only Owner can finalize regression and smoke cycles.');
+  }
+}
+
+async function ensureCycleReopenOwnerAccess(
+  userId: number,
+  organizationDocumentId?: string | null,
+) {
+  if (!organizationDocumentId) {
+    throw new errors.ForbiddenError('An active organization membership is required.');
+  }
+
+  const memberships = await getUserMemberships(strapi, userId);
+  const membership = memberships.find(
+    item => item.organization?.documentId === organizationDocumentId,
+  );
+
+  if (!membership || !OWNER_ROLES.includes((membership.organizationRole?.code || '') as any)) {
+    throw new errors.ForbiddenError('Only Owner can reopen regression and smoke cycles.');
   }
 }
 
@@ -344,10 +390,11 @@ export default factories.createCoreController('api::test-cycle.test-cycle', () =
       await ensureCycleOwnerAccess(userId, existing.organization?.documentId);
     }
 
-    if (
-      hasCycleConfigurationChanges(payload, existing, sprintDocumentId) ||
-      isCycleReopen(payload, existing)
-    ) {
+    if (isCycleReopen(payload, existing)) {
+      await ensureCycleReopenOwnerAccess(userId, existing.organization?.documentId);
+    }
+
+    if (hasCycleConfigurationChanges(payload, existing, sprintDocumentId)) {
       await ensureCycleAdminAccess(userId, existing.organization?.documentId);
     }
 

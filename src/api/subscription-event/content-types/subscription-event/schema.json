@@ -1,0 +1,81 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subscription_events",
+  "info": {
+    "singularName": "subscription-event",
+    "pluralName": "subscription-events",
+    "displayName": "Subscription Event"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "eventType": {
+      "type": "enumeration",
+      "enum": [
+        "upgrade_requested",
+        "plan_upgraded",
+        "plan_renewed",
+        "marked_past_due",
+        "grace_started",
+        "downgraded_to_starter",
+        "plan_canceled",
+        "manual_adjustment"
+      ],
+      "required": true
+    },
+    "previousPlan": {
+      "type": "enumeration",
+      "enum": ["starter", "growth", "enterprise"]
+    },
+    "nextPlan": {
+      "type": "enumeration",
+      "enum": ["starter", "growth", "enterprise"]
+    },
+    "previousPlanStatus": {
+      "type": "enumeration",
+      "enum": ["active", "past_due", "canceled"]
+    },
+    "nextPlanStatus": {
+      "type": "enumeration",
+      "enum": ["active", "past_due", "canceled"]
+    },
+    "effectiveAt": {
+      "type": "datetime"
+    },
+    "planExpiresAt": {
+      "type": "datetime"
+    },
+    "gracePeriodEndsAt": {
+      "type": "datetime"
+    },
+    "paymentMethod": {
+      "type": "enumeration",
+      "enum": [
+        "manual_transfer",
+        "nequi",
+        "whatsapp",
+        "wompi",
+        "mercadopago",
+        "other"
+      ]
+    },
+    "externalReference": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "changedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

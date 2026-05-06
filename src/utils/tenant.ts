@@ -1,6 +1,10 @@
 import type { Core } from '@strapi/strapi';
 import { ensureUserWorkspace, linkMembershipForRole } from './bootstrap';
 
+export const ACTIVE_MEMBERSHIP_REQUIRED_ERROR = 'An active organization membership is required.';
+export const INACTIVE_MEMBERSHIP_ERROR = 'Your organization membership is inactive.';
+export const INACTIVE_ORGANIZATION_ERROR = 'Your organization is inactive.';
+
 type MembershipRecord = {
   documentId: string;
   isActive: boolean;
@@ -25,6 +29,9 @@ async function findActiveMemberships(strapi: Core.Strapi, userId: number) {
       filters: {
         isActive: true,
         user: { id: userId },
+        organization: {
+          status: 'active',
+        },
       },
       populate: {
         organization: true,
@@ -40,6 +47,37 @@ async function hasMembershipHistory(strapi: Core.Strapi, userId: number) {
       filters: {
         user: { id: userId },
       },
+    });
+
+  return Boolean(membership?.documentId);
+}
+
+async function hasMembershipInInactiveOrganization(strapi: Core.Strapi, userId: number) {
+  const membership = await strapi
+    .documents('api::organization-membership.organization-membership')
+    .findFirst({
+      filters: {
+        user: { id: userId },
+        isActive: true,
+        organization: {
+          status: 'inactive',
+        },
+      },
+      fields: ['documentId'],
+    });
+
+  return Boolean(membership?.documentId);
+}
+
+async function hasInactiveMembership(strapi: Core.Strapi, userId: number) {
+  const membership = await strapi
+    .documents('api::organization-membership.organization-membership')
+    .findFirst({
+      filters: {
+        user: { id: userId },
+        isActive: false,
+      },
+      fields: ['documentId'],
     });
 
   return Boolean(membership?.documentId);
@@ -102,6 +140,28 @@ export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
   await ensureUserWorkspace(strapi, userId);
 
   return findActiveMemberships(strapi, userId);
+}
+
+export async function getUserMembershipAccessError(strapi: Core.Strapi, userId: number) {
+  const memberships = await findActiveMemberships(strapi, userId);
+
+  if (memberships.length > 0) {
+    return null;
+  }
+
+  if (await hasMembershipInInactiveOrganization(strapi, userId)) {
+    return INACTIVE_ORGANIZATION_ERROR;
+  }
+
+  if (await hasInactiveMembership(strapi, userId)) {
+    return INACTIVE_MEMBERSHIP_ERROR;
+  }
+
+  if (await hasMembershipHistory(strapi, userId)) {
+    return INACTIVE_MEMBERSHIP_ERROR;
+  }
+
+  return ACTIVE_MEMBERSHIP_REQUIRED_ERROR;
 }
 
 export function getAllowedOrganizationDocumentIds(memberships: MembershipRecord[]) {

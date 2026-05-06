@@ -18,6 +18,9 @@
       "type": "string",
       "required": true
     },
+    "jiraTaskUrl": {
+      "type": "string"
+    },
     "testTypes": {
       "type": "json"
     },

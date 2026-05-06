@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "external_participants",
+  "info": {
+    "singularName": "external-participant",
+    "pluralName": "external-participants",
+    "displayName": "External Participant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "role": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "sourceProject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project"
+    }
+  }
+}
