@@ -22,6 +22,15 @@ type ProjectPayload = {
   businessRules?: string;
   aiProjectInsights?: string;
   aiWireframeBrief?: string;
+  serviceBillingPhases?: unknown;
+  proposalType?: 'phases' | 'services' | 'mixed' | null;
+  proposalSentAt?: string | null;
+  projectStartAt?: string | null;
+  contractNumber?: string | null;
+  proposalNumber?: string | null;
+  currency?: string | null;
+  paymentTermsDays?: number | null;
+  proposalOwner?: string | null;
   organization?: string;
 };
 
@@ -43,6 +52,12 @@ function parseLogoDataUrl(value?: string | null) {
 }
 
 function normalizeProjectData(payload: ProjectPayload) {
+  const normalizedServiceBillingPhases = Array.isArray(payload.serviceBillingPhases)
+    ? JSON.stringify(payload.serviceBillingPhases)
+    : payload.serviceBillingPhases == null
+      ? null
+      : String(payload.serviceBillingPhases || '').trim() || null;
+
   return {
     name: payload.name || '',
     key: payload.key || '',
@@ -57,6 +72,18 @@ function normalizeProjectData(payload: ProjectPayload) {
     businessRules: payload.businessRules || '',
     aiProjectInsights: payload.aiProjectInsights || '',
     aiWireframeBrief: payload.aiWireframeBrief || '',
+    serviceBillingPhases: normalizedServiceBillingPhases,
+    proposalType: payload.proposalType || null,
+    proposalSentAt: payload.proposalSentAt || null,
+    projectStartAt: payload.projectStartAt || null,
+    contractNumber: payload.contractNumber || null,
+    proposalNumber: payload.proposalNumber || null,
+    currency: payload.currency || null,
+    paymentTermsDays:
+      typeof payload.paymentTermsDays === 'number' && Number.isFinite(payload.paymentTermsDays)
+        ? payload.paymentTermsDays
+        : null,
+    proposalOwner: payload.proposalOwner || null,
   };
 }
 

@@ -45,5 +45,14 @@ export default {
         policies: ['global::has-active-membership'],
       },
     },
+    {
+      method: 'POST',
+      path: '/ai/delivery-units/summary',
+      handler: 'ai.generateDeliveryUnitSummary',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
   ],
 };

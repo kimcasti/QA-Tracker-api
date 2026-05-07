@@ -22,6 +22,37 @@ type ExecutionRecommendationCandidate = {
   testCaseCount: number;
 };
 
+type DeliveryUnitSummaryInput = {
+  deliveryUnit?: {
+    name?: string;
+    type?: string;
+    status?: string;
+    periodLabel?: string;
+    startDate?: string;
+    estimatedEndDate?: string;
+    baseDescription?: string;
+  };
+  activities?: Array<{
+    name?: string;
+    description?: string;
+  }>;
+  functionalities?: Array<{
+    name?: string;
+    status?: string;
+    priority?: string;
+    module?: string;
+  }>;
+  metrics?: {
+    totalFunctionalities?: number;
+    completed?: number;
+    inProgress?: number;
+    pending?: number;
+    activeBugs?: number;
+    testCasesCount?: number;
+    progressPercent?: number;
+  };
+};
+
 function getData(ctx: any) {
   return (ctx.request.body?.data || ctx.request.body || {}) as Record<string, any>;
 }
@@ -166,6 +197,34 @@ export default {
       projectId,
       input,
     });
+
+    ctx.body = { data: result };
+  },
+
+  async generateDeliveryUnitSummary(ctx) {
+    const userId = requireUserId(ctx);
+    const data = getData(ctx);
+    const projectId = requireProjectId(data);
+
+    const payload = {
+      deliveryUnit:
+        data.deliveryUnit && typeof data.deliveryUnit === 'object' ? data.deliveryUnit : {},
+      activities: Array.isArray(data.activities) ? data.activities : [],
+      functionalities: Array.isArray(data.functionalities) ? data.functionalities : [],
+      metrics: data.metrics && typeof data.metrics === 'object' ? data.metrics : {},
+    } satisfies DeliveryUnitSummaryInput;
+
+    const unitName = String(payload.deliveryUnit?.name || '').trim();
+    if (!unitName) {
+      throw new errors.ValidationError('Delivery unit name is required.');
+    }
+
+    const result = await strapi
+      .service('api::ai.ai')
+      .generateDeliveryUnitSummary(userId, {
+        projectId,
+        input: payload,
+      });
 
     ctx.body = { data: result };
   },

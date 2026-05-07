@@ -4,7 +4,11 @@ export const PRO_PLAN_PRICE_MONTHLY_USD = GROWTH_PLAN_PRICE_MONTHLY_USD;
 export type OrganizationPlan = 'starter' | 'growth' | 'enterprise';
 export type OrganizationPlanStatus = 'active' | 'past_due' | 'canceled';
 export type PlanFeatureKey = 'ai' | 'templates' | 'audit' | 'exports';
-export type PlanReportKey = 'qaStatusSummary' | 'qaProgress' | 'executiveProjectStatus';
+export type PlanReportKey =
+  | 'qaStatusSummary'
+  | 'qaProgress'
+  | 'executiveProjectStatus'
+  | 'deliveryUnitProgress';
 export type PlanLimitKey = 'projects' | 'users' | 'features' | 'testCases';
 export type PlanMonthlyAllowanceKey = 'aiRequests' | 'exports';
 
@@ -27,6 +31,7 @@ type PlanReportAccess = {
   qaStatusSummary: boolean;
   qaProgress: boolean;
   executiveProjectStatus: boolean;
+  deliveryUnitProgress: boolean;
 };
 
 type LimitedPlanConfig = {
@@ -71,6 +76,7 @@ export const PLAN_LIMITS: Record<OrganizationPlan, PlanConfig> = {
       qaStatusSummary: true,
       qaProgress: false,
       executiveProjectStatus: false,
+      deliveryUnitProgress: false,
     },
   },
   growth: {
@@ -86,6 +92,7 @@ export const PLAN_LIMITS: Record<OrganizationPlan, PlanConfig> = {
       qaStatusSummary: true,
       qaProgress: true,
       executiveProjectStatus: true,
+      deliveryUnitProgress: true,
     },
   },
   enterprise: {
@@ -98,6 +105,7 @@ export const PLAN_LIMITS: Record<OrganizationPlan, PlanConfig> = {
       qaStatusSummary: true,
       qaProgress: true,
       executiveProjectStatus: true,
+      deliveryUnitProgress: true,
     },
   },
 };

@@ -558,6 +558,108 @@ export interface ApiBugBug extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiDeliveryActivityTemplateDeliveryActivityTemplate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'delivery_activity_templates';
+  info: {
+    displayName: 'Delivery Activity Template';
+    pluralName: 'delivery-activity-templates';
+    singularName: 'delivery-activity-template';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deliveryUnits: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::delivery-unit.delivery-unit'
+    >;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::delivery-activity-template.delivery-activity-template'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiDeliveryUnitDeliveryUnit
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'delivery_units';
+  info: {
+    displayName: 'Delivery Unit';
+    pluralName: 'delivery-units';
+    singularName: 'delivery-unit';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    activities: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::delivery-activity-template.delivery-activity-template'
+    >;
+    amount: Schema.Attribute.Decimal;
+    baseDescription: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estimatedEndDate: Schema.Attribute.Date;
+    functionalities: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::functionality.functionality'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::delivery-unit.delivery-unit'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    periodLabel: Schema.Attribute.String;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    startDate: Schema.Attribute.Date;
+    status: Schema.Attribute.Enumeration<
+      ['planned', 'in_progress', 'completed', 'paused', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'planned'>;
+    type: Schema.Attribute.Enumeration<
+      ['phase', 'service', 'maintenance', 'support', 'milestone', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'phase'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiExternalParticipantExternalParticipant
   extends Struct.CollectionTypeSchema {
   collectionName: 'external_participants';
@@ -615,6 +717,10 @@ export interface ApiFunctionalityFunctionality
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     deliveryDate: Schema.Attribute.Date;
+    deliveryUnit: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::delivery-unit.delivery-unit'
+    >;
     isCore: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isRegression: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isSmoke: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
@@ -1135,10 +1241,16 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     aiWireframeBrief: Schema.Attribute.Text;
     bugs: Schema.Attribute.Relation<'oneToMany', 'api::bug.bug'>;
     businessRules: Schema.Attribute.Text;
+    contractNumber: Schema.Attribute.String;
     coreRequirements: Schema.Attribute.JSON;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    currency: Schema.Attribute.String;
+    deliveryUnits: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::delivery-unit.delivery-unit'
+    >;
     description: Schema.Attribute.Text;
     functionalities: Schema.Attribute.Relation<
       'oneToMany',
@@ -1169,12 +1281,19 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
       'api::organization.organization'
     > &
       Schema.Attribute.Required;
+    paymentTermsDays: Schema.Attribute.Integer;
     personaRoles: Schema.Attribute.Relation<
       'oneToMany',
       'api::project-persona-role.project-persona-role'
     >;
+    projectStartAt: Schema.Attribute.Date;
+    proposalNumber: Schema.Attribute.String;
+    proposalOwner: Schema.Attribute.String;
+    proposalSentAt: Schema.Attribute.Date;
+    proposalType: Schema.Attribute.Enumeration<['phases', 'services', 'mixed']>;
     publishedAt: Schema.Attribute.DateTime;
     purpose: Schema.Attribute.Text;
+    serviceBillingPhases: Schema.Attribute.Text;
     sprints: Schema.Attribute.Relation<'oneToMany', 'api::sprint.sprint'>;
     status: Schema.Attribute.Enumeration<['active', 'paused', 'completed']> &
       Schema.Attribute.DefaultTo<'active'>;
@@ -2325,6 +2444,8 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::billing-request.billing-request': ApiBillingRequestBillingRequest;
       'api::bug.bug': ApiBugBug;
+      'api::delivery-activity-template.delivery-activity-template': ApiDeliveryActivityTemplateDeliveryActivityTemplate;
+      'api::delivery-unit.delivery-unit': ApiDeliveryUnitDeliveryUnit;
       'api::external-participant.external-participant': ApiExternalParticipantExternalParticipant;
       'api::functionality.functionality': ApiFunctionalityFunctionality;
       'api::meeting-note.meeting-note': ApiMeetingNoteMeetingNote;

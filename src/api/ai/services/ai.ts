@@ -31,6 +31,37 @@ type ExecutionRecommendation = {
   reason: string;
 };
 
+type DeliveryUnitSummaryInput = {
+  deliveryUnit: {
+    name: string;
+    type?: string;
+    status?: string;
+    periodLabel?: string;
+    startDate?: string;
+    estimatedEndDate?: string;
+    baseDescription?: string;
+  };
+  activities: Array<{
+    name?: string;
+    description?: string;
+  }>;
+  functionalities: Array<{
+    name?: string;
+    status?: string;
+    priority?: string;
+    module?: string;
+  }>;
+  metrics?: {
+    totalFunctionalities?: number;
+    completed?: number;
+    inProgress?: number;
+    pending?: number;
+    activeBugs?: number;
+    testCasesCount?: number;
+    progressPercent?: number;
+  };
+};
+
 function getEnvValue(value: unknown) {
   return String(value || '').trim();
 }
@@ -547,6 +578,81 @@ Responde solo con Markdown.`;
       withAiFallback(
         async () => (await requestGeminiCompletion(prompt)).trim(),
         async () => (await requestGroqCompletion(prompt)).trim(),
+      ),
+    );
+  },
+
+  async generateDeliveryUnitSummary(
+    userId: number,
+    payload: { projectId: string; input: DeliveryUnitSummaryInput },
+  ) {
+    const input = payload.input;
+
+    const prompt = `Actua como redactora ejecutiva para reportes QA.
+Tu tarea es redactar un resumen breve y profesional de una unidad de entrega.
+
+Reglas obligatorias:
+- Usa EXCLUSIVAMENTE la informacion proporcionada abajo.
+- No inventes porcentajes, riesgos, fechas, actividades, funcionalidades, bugs ni cobertura.
+- No uses informacion del proyecto completo ni de otras unidades.
+- Si falta informacion, escribe texto conservador y breve.
+- Devuelve solo JSON valido.
+
+Unidad de entrega:
+${JSON.stringify(input.deliveryUnit, null, 2)}
+
+Actividades registradas:
+${JSON.stringify(input.activities, null, 2)}
+
+Funcionalidades asociadas:
+${JSON.stringify(input.functionalities, null, 2)}
+
+Metricas reales:
+${JSON.stringify(input.metrics || {}, null, 2)}
+
+Necesito:
+1. introduction: un parrafo corto, profesional y claro
+2. objectives: texto corto en lineas tipo bullet, derivado solo de la unidad, actividades y funcionalidades
+3. conclusion: un parrafo corto sobre avance general y preparacion de la siguiente etapa, sin inventar resultados
+
+Responde solo con JSON valido usando este formato:
+{
+  "introduction": "",
+  "objectives": "",
+  "conclusion": ""
+}`;
+
+    return runAiAction(userId, payload.projectId, () =>
+      withAiFallback(
+        async () => {
+          const text = await requestGeminiCompletion(prompt, 'application/json');
+          const result = extractJsonPayload<{
+            introduction?: unknown;
+            objectives?: unknown;
+            conclusion?: unknown;
+          }>(text);
+
+          return {
+            introduction: normalizeAiText(result?.introduction),
+            objectives: normalizeAiText(result?.objectives),
+            conclusion: normalizeAiText(result?.conclusion),
+          };
+        },
+        async () => {
+          const result = extractJsonPayload<{
+            introduction?: unknown;
+            objectives?: unknown;
+            conclusion?: unknown;
+          }>(
+            await requestGroqCompletion(`${prompt}\n\nResponde unicamente con JSON valido.`),
+          );
+
+          return {
+            introduction: normalizeAiText(result?.introduction),
+            objectives: normalizeAiText(result?.objectives),
+            conclusion: normalizeAiText(result?.conclusion),
+          };
+        },
       ),
     );
   },

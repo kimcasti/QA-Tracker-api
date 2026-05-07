@@ -89,6 +89,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::sprint.sprint"
+    },
+    "deliveryUnit": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::delivery-unit.delivery-unit",
+      "inversedBy": "functionalities"
     }
   }
 }

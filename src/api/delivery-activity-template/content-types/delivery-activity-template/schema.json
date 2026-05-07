@@ -1,0 +1,43 @@
+{
+  "kind": "collectionType",
+  "collectionName": "delivery_activity_templates",
+  "info": {
+    "singularName": "delivery-activity-template",
+    "pluralName": "delivery-activity-templates",
+    "displayName": "Delivery Activity Template"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    },
+    "deliveryUnits": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::delivery-unit.delivery-unit",
+      "mappedBy": "activities"
+    }
+  }
+}

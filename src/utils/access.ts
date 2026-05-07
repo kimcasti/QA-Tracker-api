@@ -143,6 +143,7 @@ export const EXPOSED_ACTIONS = [
   'api::ai.ai.recommendExecutionFunctionalities',
   'api::ai.ai.analyzeProject',
   'api::ai.ai.generateProjectWireframeBrief',
+  'api::ai.ai.generateDeliveryUnitSummary',
   'api::plan-access.plan-access.authorizeAi',
   'api::plan-access.plan-access.authorizeExport',
   'api::plan-access.plan-access.consumeExport',

@@ -25,6 +25,7 @@ type FunctionalityPayload = {
   project?: unknown;
   module?: unknown;
   sprint?: unknown;
+  deliveryUnit?: unknown;
   personaRoles?: unknown;
 };
 
@@ -105,6 +106,10 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
     data.sprint = extractRelationDocumentId(payload.sprint);
   }
 
+  if (hasOwnProperty(payload, 'deliveryUnit')) {
+    data.deliveryUnit = extractRelationDocumentId(payload.deliveryUnit);
+  }
+
   if (hasOwnProperty(payload, 'personaRoles')) {
     data.personaRoles = normalizeManyRelation(payload.personaRoles) ?? { disconnect: [] };
   }
@@ -164,6 +169,9 @@ const responsePopulate = {
   },
   sprint: {
     fields: ['name'],
+  },
+  deliveryUnit: {
+    fields: ['documentId', 'name', 'periodLabel', 'type'],
   },
 };
 

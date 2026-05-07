@@ -167,6 +167,7 @@ export default {
       qaStatusSummary: 'este reporte',
       qaProgress: 'este reporte',
       executiveProjectStatus: 'este reporte',
+      deliveryUnitProgress: 'este reporte por unidad de entrega',
     };
 
     await assertOrganizationReportAvailable({

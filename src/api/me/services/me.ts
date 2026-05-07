@@ -193,6 +193,7 @@ export default () => ({
           qaStatusSummary: canUsePlanReport(effectiveOrganizationPlan, 'qaStatusSummary'),
           qaProgress: canUsePlanReport(effectiveOrganizationPlan, 'qaProgress'),
           executiveProjectStatus: canUsePlanReport(effectiveOrganizationPlan, 'executiveProjectStatus'),
+          deliveryUnitProgress: canUsePlanReport(effectiveOrganizationPlan, 'deliveryUnitProgress'),
         },
         organizationUsage: organizationUsageSnapshot,
       },

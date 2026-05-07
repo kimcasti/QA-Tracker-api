@@ -1,0 +1,74 @@
+{
+  "kind": "collectionType",
+  "collectionName": "delivery_units",
+  "info": {
+    "singularName": "delivery-unit",
+    "pluralName": "delivery-units",
+    "displayName": "Delivery Unit"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["phase", "service", "maintenance", "support", "milestone", "other"],
+      "required": true,
+      "default": "phase"
+    },
+    "baseDescription": {
+      "type": "text"
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "estimatedEndDate": {
+      "type": "date"
+    },
+    "periodLabel": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "decimal"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["planned", "in_progress", "completed", "paused", "cancelled"],
+      "required": true,
+      "default": "planned"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "deliveryUnits",
+      "required": true
+    },
+    "functionalities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::functionality.functionality",
+      "mappedBy": "deliveryUnit"
+    },
+    "activities": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::delivery-activity-template.delivery-activity-template",
+      "inversedBy": "deliveryUnits"
+    }
+  }
+}

@@ -1,7 +1,12 @@
 import { errors } from '@strapi/utils';
 import type { PlanReportKey } from '../../../utils/subscription';
 
-const REPORT_KEYS: PlanReportKey[] = ['qaStatusSummary', 'qaProgress', 'executiveProjectStatus'];
+const REPORT_KEYS: PlanReportKey[] = [
+  'qaStatusSummary',
+  'qaProgress',
+  'executiveProjectStatus',
+  'deliveryUnitProgress',
+];
 
 function getPayloadValue(ctx: any, key: string) {
   return String(ctx.request.body?.data?.[key] || ctx.request.body?.[key] || '').trim();
