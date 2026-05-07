@@ -14,7 +14,11 @@ import {
   normalizeOrganizationPlan,
   shouldDowngradeToStarter,
 } from '../../../utils/subscription';
-import { getUserMemberships } from '../../../utils/tenant';
+import {
+  getAllowedOrganizationDocumentIds,
+  getUserMemberships,
+  getUserProjectAccessScope,
+} from '../../../utils/tenant';
 
 export default () => ({
   async organizationUsage(userId: number) {
@@ -23,10 +27,8 @@ export default () => ({
 
   async projectContexts(userId: number) {
     const memberships = await getUserMemberships(strapi, userId);
-
-    const organizationDocumentIds = memberships
-      .map(membership => membership.organization?.documentId)
-      .filter(Boolean);
+    const organizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
+    const projectAccessScope = await getUserProjectAccessScope(strapi, userId, memberships);
 
     const projects = organizationDocumentIds.length
       ? await strapi.documents('api::project.project').findMany({
@@ -46,9 +48,14 @@ export default () => ({
           sort: ['name:asc'],
         })
       : [];
+    const visibleProjects = projectAccessScope.hasProjectRestrictions
+      ? projects.filter(project =>
+          projectAccessScope.allowedProjectDocumentIds.includes(project.documentId),
+        )
+      : projects;
 
     return {
-      projects: projects.map(project => ({
+      projects: visibleProjects.map(project => ({
         documentId: project.documentId,
         key: project.key,
         organization: project.organization
@@ -63,10 +70,8 @@ export default () => ({
 
   async workspace(userId: number) {
     const memberships = await getUserMemberships(strapi, userId);
-
-    const organizationDocumentIds = memberships
-      .map((membership) => membership.organization?.documentId)
-      .filter(Boolean);
+    const organizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
+    const projectAccessScope = await getUserProjectAccessScope(strapi, userId, memberships);
 
     const projects = organizationDocumentIds.length
       ? await strapi.documents('api::project.project').findMany({
@@ -83,6 +88,11 @@ export default () => ({
           sort: ['name:asc'],
         })
       : [];
+    const visibleProjects = projectAccessScope.hasProjectRestrictions
+      ? projects.filter(project =>
+          projectAccessScope.allowedProjectDocumentIds.includes(project.documentId),
+        )
+      : projects;
 
     const user = await strapi.db.query('plugin::users-permissions.user').findOne({
       where: { id: userId },
@@ -128,7 +138,7 @@ export default () => ({
         organization: membership.organization,
         role: membership.organizationRole,
       })),
-      projects,
+      projects: visibleProjects,
       projectQuota: {
         plan: contractedOrganizationPlan,
         effectivePlan: effectiveOrganizationPlan,

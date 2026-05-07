@@ -6,7 +6,7 @@ import {
   assertOrganizationFeatureAvailable,
   assertOrganizationLimitAvailable,
 } from '../../../utils/plan-enforcement';
-import { getUserMemberships } from '../../../utils/tenant';
+import { getAllowedOrganizationDocumentIds, getUserMemberships, getUserProjectAccessScope } from '../../../utils/tenant';
 
 type ProjectPayload = {
   name?: string;
@@ -93,9 +93,8 @@ function hasAiProjectPayload(payload: ProjectPayload) {
 
 async function ensureProjectAccess(userId: number, projectDocumentId: string) {
   const memberships = await getUserMemberships(strapi, userId);
-  const allowedOrganizationDocumentIds = memberships
-    .map(membership => membership.organization?.documentId)
-    .filter((value): value is string => Boolean(value));
+  const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
+  const projectAccessScope = await getUserProjectAccessScope(strapi, userId, memberships);
 
   if (allowedOrganizationDocumentIds.length === 0) {
     throw new errors.ForbiddenError('An active organization membership is required.');
@@ -117,6 +116,13 @@ async function ensureProjectAccess(userId: number, projectDocumentId: string) {
     !allowedOrganizationDocumentIds.includes(project.organization.documentId)
   ) {
     throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+  }
+
+  if (
+    projectAccessScope.hasProjectRestrictions &&
+    !projectAccessScope.allowedProjectDocumentIds.includes(project.documentId)
+  ) {
+    throw new errors.ForbiddenError('Your role is not assigned to this project.');
   }
 
   return project;

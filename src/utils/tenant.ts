@@ -4,6 +4,9 @@ import { ensureUserWorkspace, linkMembershipForRole } from './bootstrap';
 export const ACTIVE_MEMBERSHIP_REQUIRED_ERROR = 'An active organization membership is required.';
 export const INACTIVE_MEMBERSHIP_ERROR = 'Your organization membership is inactive.';
 export const INACTIVE_ORGANIZATION_ERROR = 'Your organization is inactive.';
+export const PROJECT_ASSIGNED_ROLE_CODES = ['manager', 'viewer'] as const;
+
+type ProjectAssignedRoleCode = (typeof PROJECT_ASSIGNED_ROLE_CODES)[number];
 
 type MembershipRecord = {
   documentId: string;
@@ -20,6 +23,14 @@ type MembershipRecord = {
     code: string;
     name: string;
   };
+};
+
+type UserProjectAccessScope = {
+  allowedOrganizationDocumentIds: string[];
+  unrestrictedOrganizationDocumentIds: string[];
+  restrictedOrganizationDocumentIds: string[];
+  allowedProjectDocumentIds: string[];
+  hasProjectRestrictions: boolean;
 };
 
 async function findActiveMemberships(strapi: Core.Strapi, userId: number) {
@@ -176,6 +187,91 @@ export function getAllowedAccessRoleCodes(memberships: MembershipRecord[]) {
     .filter((value): value is string => Boolean(value));
 }
 
+export function isProjectAssignmentRoleCode(roleCode?: string): roleCode is ProjectAssignedRoleCode {
+  return PROJECT_ASSIGNED_ROLE_CODES.includes((roleCode || '') as ProjectAssignedRoleCode);
+}
+
+async function getAcceptedProjectAssignments(
+  strapi: Core.Strapi,
+  email: string,
+  organizationDocumentIds: string[]
+) {
+  if (!email || organizationDocumentIds.length === 0) {
+    return [];
+  }
+
+  const invitations = await strapi.documents(
+    'api::organization-invitation.organization-invitation' as any,
+  ).findMany({
+    filters: {
+      email,
+      status: 'accepted',
+      workspaceProjectDocumentId: {
+        $notNull: true,
+      },
+      organization: {
+        documentId: {
+          $in: organizationDocumentIds,
+        },
+      },
+    },
+    fields: ['workspaceProjectDocumentId'],
+    sort: ['invitedAt:desc'],
+  });
+
+  return invitations
+    .map((invitation) => String(invitation.workspaceProjectDocumentId || '').trim())
+    .filter(Boolean);
+}
+
+export async function getUserProjectAccessScope(
+  strapi: Core.Strapi,
+  userId: number,
+  memberships?: MembershipRecord[]
+): Promise<UserProjectAccessScope> {
+  const resolvedMemberships = memberships ?? (await getUserMemberships(strapi, userId));
+  const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(resolvedMemberships);
+  const unrestrictedOrganizationDocumentIds = resolvedMemberships
+    .filter((membership) => !isProjectAssignmentRoleCode(membership.organizationRole?.code))
+    .map((membership) => membership.organization?.documentId)
+    .filter((value): value is string => Boolean(value));
+  const restrictedOrganizationDocumentIds = resolvedMemberships
+    .filter((membership) => isProjectAssignmentRoleCode(membership.organizationRole?.code))
+    .map((membership) => membership.organization?.documentId)
+    .filter((value): value is string => Boolean(value));
+
+  const hasProjectRestrictions = restrictedOrganizationDocumentIds.length > 0;
+
+  if (!hasProjectRestrictions) {
+    return {
+      allowedOrganizationDocumentIds,
+      unrestrictedOrganizationDocumentIds,
+      restrictedOrganizationDocumentIds,
+      allowedProjectDocumentIds: [],
+      hasProjectRestrictions: false,
+    };
+  }
+
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+    select: ['email'],
+  });
+  const normalizedEmail = (user?.email || '').trim().toLowerCase();
+  const allowedProjectDocumentIds = await getAcceptedProjectAssignments(
+    strapi,
+    normalizedEmail,
+    restrictedOrganizationDocumentIds,
+  );
+
+  return {
+    allowedOrganizationDocumentIds,
+    unrestrictedOrganizationDocumentIds,
+    restrictedOrganizationDocumentIds,
+    allowedProjectDocumentIds,
+    hasProjectRestrictions: true,
+  };
+}
+
 function extractConnectedDocumentId(rawValue: unknown): string | null {
   if (!rawValue) return null;
   if (typeof rawValue === 'string') return rawValue;
@@ -218,6 +314,21 @@ export async function getOrganizationDocumentIdFromPayload(
   return project?.organization?.documentId ?? null;
 }
 
+export async function getProjectDocumentIdFromPayload(
+  strapi: Core.Strapi,
+  contentTypeUid: string,
+  data: Record<string, unknown>
+) {
+  if (contentTypeUid === 'api::project.project') {
+    return extractConnectedDocumentId(data.documentId) ?? null;
+  }
+
+  const directProject = extractConnectedDocumentId(data.project);
+  if (directProject) return directProject;
+
+  return null;
+}
+
 export async function getOrganizationDocumentIdFromEntity(
   strapi: Core.Strapi,
   contentTypeUid: string,
@@ -231,4 +342,23 @@ export async function getOrganizationDocumentIdFromEntity(
   });
 
   return entity?.organization?.documentId ?? null;
+}
+
+export async function getProjectDocumentIdFromEntity(
+  strapi: Core.Strapi,
+  contentTypeUid: string,
+  documentId: string
+) {
+  if (contentTypeUid === 'api::project.project') {
+    return documentId;
+  }
+
+  const entity = await strapi.documents(contentTypeUid as any).findOne({
+    documentId,
+    populate: {
+      project: true,
+    },
+  });
+
+  return entity?.project?.documentId ?? null;
 }

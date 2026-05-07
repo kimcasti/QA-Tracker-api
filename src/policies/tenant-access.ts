@@ -6,6 +6,9 @@ import {
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromEntity,
   getOrganizationDocumentIdFromPayload,
+  getProjectDocumentIdFromEntity,
+  getProjectDocumentIdFromPayload,
+  getUserProjectAccessScope,
   getUserMemberships,
 } from '../utils/tenant';
 
@@ -13,6 +16,28 @@ type TenantPolicyConfig = {
   allowedRoles?: string[];
   contentTypeUid: string;
 };
+
+const PROJECT_SCOPED_CONTENT_TYPES = new Set([
+  'api::project.project',
+  'api::project-proposal.project-proposal',
+  'api::project-story-map.project-story-map',
+  'api::project-module.project-module',
+  'api::project-persona-role.project-persona-role',
+  'api::sprint.sprint',
+  'api::functionality.functionality',
+  'api::test-case.test-case',
+  'api::test-case-template.test-case-template',
+  'api::test-run.test-run',
+  'api::test-run-result.test-run-result',
+  'api::test-cycle.test-cycle',
+  'api::test-cycle-execution.test-cycle-execution',
+  'api::test-plan.test-plan',
+  'api::bug.bug',
+  'api::meeting-note.meeting-note',
+  'api::delivery-unit.delivery-unit',
+  'api::delivery-activity-template.delivery-activity-template',
+  'api::external-participant.external-participant',
+]);
 
 type TenantPolicyContext = {
   state: {
@@ -50,6 +75,7 @@ export default async (
   const memberships = await getUserMemberships(strapi, user.id);
   const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
   const membershipRoleCodes = getAllowedAccessRoleCodes(memberships);
+  const projectAccessScope = await getUserProjectAccessScope(strapi, user.id, memberships);
 
   if (allowedOrganizationDocumentIds.length === 0) {
     throw new errors.ForbiddenError(await getUserMembershipAccessError(strapi, user.id));
@@ -79,6 +105,22 @@ export default async (
               $in: allowedOrganizationDocumentIds,
             },
           },
+          ...(projectAccessScope.hasProjectRestrictions &&
+          PROJECT_SCOPED_CONTENT_TYPES.has(config.contentTypeUid)
+            ? config.contentTypeUid === 'api::project.project'
+              ? {
+                  documentId: {
+                    $in: projectAccessScope.allowedProjectDocumentIds,
+                  },
+                }
+              : {
+                  project: {
+                    documentId: {
+                      $in: projectAccessScope.allowedProjectDocumentIds,
+                    },
+                  },
+                }
+            : {}),
         },
       };
     }
@@ -91,12 +133,25 @@ export default async (
     (entityDocumentId
       ? await getOrganizationDocumentIdFromEntity(strapi, config.contentTypeUid, entityDocumentId)
       : null);
+  const requestedProjectDocumentId =
+    (await getProjectDocumentIdFromPayload(strapi, config.contentTypeUid, bodyData)) ??
+    (entityDocumentId
+      ? await getProjectDocumentIdFromEntity(strapi, config.contentTypeUid, entityDocumentId)
+      : null);
 
   if (
     requestedOrganizationDocumentId &&
     !allowedOrganizationDocumentIds.includes(requestedOrganizationDocumentId)
   ) {
     throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+  }
+
+  if (
+    requestedProjectDocumentId &&
+    projectAccessScope.hasProjectRestrictions &&
+    !projectAccessScope.allowedProjectDocumentIds.includes(requestedProjectDocumentId)
+  ) {
+    throw new errors.ForbiddenError('Your role is not assigned to this project.');
   }
 
   return true;

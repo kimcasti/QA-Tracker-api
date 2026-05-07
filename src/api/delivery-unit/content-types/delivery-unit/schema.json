@@ -58,6 +58,12 @@
       "inversedBy": "deliveryUnits",
       "required": true
     },
+    "proposal": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project-proposal.project-proposal",
+      "inversedBy": "deliveryUnits"
+    },
     "functionalities": {
       "type": "relation",
       "relation": "oneToMany",

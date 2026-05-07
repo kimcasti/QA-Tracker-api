@@ -17,6 +17,7 @@ type DeliveryUnitPayload = {
   status?: 'planned' | 'in_progress' | 'completed' | 'paused' | 'cancelled';
   sortOrder?: number | null;
   activities?: unknown;
+  proposal?: unknown;
   organization?: unknown;
   project?: unknown;
 };
@@ -63,6 +64,10 @@ function normalizeDeliveryUnitData(payload: DeliveryUnitPayload) {
 
   if (hasOwnProperty(payload, 'activities')) {
     data.activities = normalizeManyRelation(payload.activities) ?? { disconnect: [] };
+  }
+
+  if (hasOwnProperty(payload, 'proposal')) {
+    data.proposal = payload.proposal ? { documentId: extractRelationDocumentId(payload.proposal) } : null;
   }
 
   return data;
@@ -139,12 +144,102 @@ async function resolveOrganizationDocumentId(userId: number, payload: DeliveryUn
   return requestedOrganizationDocumentId ?? allowedOrganizationDocumentIds[0];
 }
 
+async function ensureProjectDocument(projectDocumentId: string) {
+  const project = await strapi.documents('api::project.project').findOne({
+    documentId: projectDocumentId,
+    populate: {
+      organization: true,
+    },
+  });
+
+  if (!project?.documentId) {
+    throw new errors.NotFoundError('Project not found.');
+  }
+
+  return project;
+}
+
+async function ensureProposalDocument(proposalDocumentId: string) {
+  const proposal = await strapi
+    .documents('api::project-proposal.project-proposal' as any)
+    .findOne({
+      documentId: proposalDocumentId,
+      populate: {
+        organization: true,
+        project: true,
+      } as any,
+    });
+
+  if (!proposal?.documentId) {
+    throw new errors.NotFoundError('Proposal not found.');
+  }
+
+  return proposal;
+}
+
+function ensureOrganizationMatchesProject(
+  organizationDocumentId: string,
+  project: {
+    organization?: {
+      documentId?: string;
+    };
+  },
+) {
+  const projectOrganizationDocumentId = project.organization?.documentId || null;
+
+  if (!projectOrganizationDocumentId) {
+    throw new errors.ValidationError('Project organization is required.');
+  }
+
+  if (projectOrganizationDocumentId !== organizationDocumentId) {
+    throw new errors.ForbiddenError(
+      'Delivery unit organization must match the selected project organization.',
+    );
+  }
+}
+
+function ensureProposalMatchesProject(
+  proposal: {
+    organization?: {
+      documentId?: string;
+    };
+    project?: {
+      documentId?: string;
+    };
+  } & Record<string, unknown>,
+  project: {
+    documentId?: string;
+    organization?: {
+      documentId?: string;
+    };
+  } & Record<string, unknown>,
+) {
+  if (!proposal.project?.documentId || proposal.project.documentId !== project.documentId) {
+    throw new errors.ForbiddenError(
+      'The selected proposal does not belong to the selected project.',
+    );
+  }
+
+  if (
+    proposal.organization?.documentId &&
+    project.organization?.documentId &&
+    proposal.organization.documentId !== project.organization.documentId
+  ) {
+    throw new errors.ForbiddenError(
+      'The selected proposal does not belong to the same organization as the project.',
+    );
+  }
+}
+
 const responsePopulate = {
   project: {
     fields: ['key'],
   },
   activities: {
     fields: ['documentId', 'name', 'description', 'isActive'],
+  },
+  proposal: {
+    fields: ['documentId', 'name', 'proposalOwner'],
   },
 };
 
@@ -163,7 +258,15 @@ export default factories.createCoreController('api::delivery-unit.delivery-unit'
       throw new errors.ValidationError('Delivery unit project is required.');
     }
 
+    const project = await ensureProjectDocument(projectDocumentId);
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
+    ensureOrganizationMatchesProject(organizationDocumentId, project);
+
+    const proposalDocumentId = extractRelationDocumentId(payload.proposal);
+    if (proposalDocumentId) {
+      const proposal = await ensureProposalDocument(proposalDocumentId);
+      ensureProposalMatchesProject(proposal, project);
+    }
 
     const created = await strapi.documents('api::delivery-unit.delivery-unit' as any).create({
       data: {
@@ -194,6 +297,7 @@ export default factories.createCoreController('api::delivery-unit.delivery-unit'
       populate: {
         organization: true,
         project: true,
+        proposal: true,
       } as any,
     }) as any;
 
@@ -209,11 +313,23 @@ export default factories.createCoreController('api::delivery-unit.delivery-unit'
       throw new errors.ValidationError('Delivery unit project is required.');
     }
 
+    const project = await ensureProjectDocument(projectDocumentId);
     const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
       organization: payload.organization ?? existing.organization?.documentId,
     });
+    ensureOrganizationMatchesProject(organizationDocumentId, project);
+
+    const proposalDocumentId =
+      hasOwnProperty(payload, 'proposal')
+        ? extractRelationDocumentId(payload.proposal)
+        : existing.proposal?.documentId ?? null;
+
+    if (proposalDocumentId) {
+      const proposal = await ensureProposalDocument(proposalDocumentId);
+      ensureProposalMatchesProject(proposal, project);
+    }
 
     const updated = await strapi.documents('api::delivery-unit.delivery-unit' as any).update({
       documentId,

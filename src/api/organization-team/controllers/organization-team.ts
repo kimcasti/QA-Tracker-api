@@ -14,7 +14,7 @@ import {
 } from '../../../utils/organization-membership-admin';
 import { getUserMemberships } from '../../../utils/tenant';
 
-const TEAM_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'viewer'] as const;
+const TEAM_ROLE_CODES = ['owner', 'qa-lead', 'qa-engineer', 'manager', 'viewer'] as const;
 const PENDING_INVITATION_STATUSES = ['pending', 'expired', 'cancelled'] as const;
 
 type TeamRoleCode = (typeof TEAM_ROLE_CODES)[number];
@@ -34,6 +34,10 @@ function normalizeEmail(value: unknown) {
 function roleOrderIndex(code?: string) {
   const index = TEAM_ROLE_CODES.indexOf((code || '') as TeamRoleCode);
   return index === -1 ? TEAM_ROLE_CODES.length : index;
+}
+
+function requiresProjectAssignment(roleCode?: string) {
+  return roleCode === 'manager' || roleCode === 'viewer';
 }
 
 async function getOrganizationDbId(documentId: string) {
@@ -365,6 +369,10 @@ export default {
       throw new errors.ValidationError('The selected role is not valid for this organization.');
     }
 
+    if (requiresProjectAssignment(roleRecord.code) && !workspaceProjectDocumentId) {
+      throw new errors.ValidationError('Manager and Viewer invitations require a project assignment.');
+    }
+
     const existingUser = await strapi.db.query('plugin::users-permissions.user').findOne({
       where: { email },
     });
@@ -504,6 +512,12 @@ export default {
 
     if (!roleRecord || !TEAM_ROLE_CODES.includes(roleRecord.code as TeamRoleCode)) {
       throw new errors.ValidationError('The selected role is not valid for this organization.');
+    }
+
+    if (requiresProjectAssignment(roleRecord.code)) {
+      throw new errors.ValidationError(
+        'Manager and Viewer role changes require project assignment support. Re-invite the user with the desired project access.',
+      );
     }
 
     await strapi.documents('api::organization-membership.organization-membership').update({

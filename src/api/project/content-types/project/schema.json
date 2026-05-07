@@ -154,6 +154,12 @@
       "relation": "oneToMany",
       "target": "api::delivery-unit.delivery-unit",
       "mappedBy": "project"
+    },
+    "proposals": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-proposal.project-proposal",
+      "mappedBy": "project"
     }
   }
 }

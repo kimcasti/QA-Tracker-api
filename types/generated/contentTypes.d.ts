@@ -641,6 +641,10 @@ export interface ApiDeliveryUnitDeliveryUnit
     periodLabel: Schema.Attribute.String;
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
+    proposal: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::project-proposal.project-proposal'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     startDate: Schema.Attribute.Date;
@@ -1190,6 +1194,61 @@ export interface ApiProjectPersonaRoleProjectPersonaRole
   };
 }
 
+export interface ApiProjectProposalProjectProposal
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_proposals';
+  info: {
+    displayName: 'Project Proposal';
+    pluralName: 'project-proposals';
+    singularName: 'project-proposal';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    contractNumber: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String;
+    deliveryUnits: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::delivery-unit.delivery-unit'
+    >;
+    isPrimary: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-proposal.project-proposal'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    paymentTermsDays: Schema.Attribute.Integer;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    projectStartAt: Schema.Attribute.Date;
+    proposalNumber: Schema.Attribute.String;
+    proposalOwner: Schema.Attribute.String;
+    proposalSentAt: Schema.Attribute.Date;
+    proposalType: Schema.Attribute.Enumeration<['phases', 'services', 'mixed']>;
+    publishedAt: Schema.Attribute.DateTime;
+    serviceBillingPhases: Schema.Attribute.Text;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'sent', 'approved', 'rejected', 'archived']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiProjectStoryMapProjectStoryMap
   extends Struct.CollectionTypeSchema {
   collectionName: 'project_story_maps';
@@ -1289,6 +1348,10 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     projectStartAt: Schema.Attribute.Date;
     proposalNumber: Schema.Attribute.String;
     proposalOwner: Schema.Attribute.String;
+    proposals: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-proposal.project-proposal'
+    >;
     proposalSentAt: Schema.Attribute.Date;
     proposalType: Schema.Attribute.Enumeration<['phases', 'services', 'mixed']>;
     publishedAt: Schema.Attribute.DateTime;
@@ -2457,6 +2520,7 @@ declare module '@strapi/strapi' {
       'api::personal-note.personal-note': ApiPersonalNotePersonalNote;
       'api::project-module.project-module': ApiProjectModuleProjectModule;
       'api::project-persona-role.project-persona-role': ApiProjectPersonaRoleProjectPersonaRole;
+      'api::project-proposal.project-proposal': ApiProjectProposalProjectProposal;
       'api::project-story-map.project-story-map': ApiProjectStoryMapProjectStoryMap;
       'api::project.project': ApiProjectProject;
       'api::sprint.sprint': ApiSprintSprint;

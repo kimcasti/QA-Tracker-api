@@ -1,0 +1,75 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_proposals",
+  "info": {
+    "singularName": "project-proposal",
+    "pluralName": "project-proposals",
+    "displayName": "Project Proposal"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "sent", "approved", "rejected", "archived"],
+      "required": true,
+      "default": "draft"
+    },
+    "isPrimary": {
+      "type": "boolean",
+      "default": false
+    },
+    "serviceBillingPhases": {
+      "type": "text"
+    },
+    "proposalType": {
+      "type": "enumeration",
+      "enum": ["phases", "services", "mixed"]
+    },
+    "proposalSentAt": {
+      "type": "date"
+    },
+    "projectStartAt": {
+      "type": "date"
+    },
+    "contractNumber": {
+      "type": "string"
+    },
+    "proposalNumber": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "paymentTermsDays": {
+      "type": "integer"
+    },
+    "proposalOwner": {
+      "type": "string"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "proposals",
+      "required": true
+    },
+    "deliveryUnits": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::delivery-unit.delivery-unit",
+      "mappedBy": "proposal"
+    }
+  }
+}
