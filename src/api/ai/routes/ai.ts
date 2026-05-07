@@ -54,5 +54,14 @@ export default {
         policies: ['global::has-active-membership'],
       },
     },
+    {
+      method: 'POST',
+      path: '/ai/reports/technical-analysis',
+      handler: 'ai.analyzeTechnicalReport',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
   ],
 };

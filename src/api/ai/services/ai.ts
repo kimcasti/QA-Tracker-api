@@ -62,6 +62,17 @@ type DeliveryUnitSummaryInput = {
   };
 };
 
+type TechnicalReportAnalysisInput = {
+  reportType: string;
+  reportTitle: string;
+  reportPurpose: string;
+  scope?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+  highlights?: unknown[];
+  risks?: unknown[];
+  details?: Record<string, unknown>;
+};
+
 function getEnvValue(value: unknown) {
   return String(value || '').trim();
 }
@@ -160,6 +171,240 @@ function normalizeAiText(value: unknown) {
   }
 
   return String(value);
+}
+
+function buildTechnicalReportPrompt(input: TechnicalReportAnalysisInput) {
+  const sharedContext = `Contexto del reporte:
+- Tipo: ${input.reportType}
+- Titulo: ${input.reportTitle}
+- Proposito: ${input.reportPurpose}
+
+Alcance:
+${JSON.stringify(input.scope || {}, null, 2)}
+
+Metricas:
+${JSON.stringify(input.metrics || {}, null, 2)}
+
+Hallazgos base:
+${JSON.stringify(input.highlights || [], null, 2)}
+
+Riesgos base:
+${JSON.stringify(input.risks || [], null, 2)}
+
+Detalle adicional:
+${JSON.stringify(input.details || {}, null, 2)}`;
+
+  if (input.reportType === 'qa-status-summary') {
+    return `Genera un analisis ejecutivo y tecnico del reporte QA utilizando exclusivamente los datos suministrados.
+
+${sharedContext}
+
+IMPORTANTE:
+- No uses markdown.
+- No uses asteriscos (**).
+- No uses tablas markdown.
+- No uses lenguaje exageradamente robotico.
+- Manten un tono profesional, ejecutivo y facil de leer.
+- Usa parrafos cortos.
+- Usa titulos simples y limpios.
+- El analisis debe sentirse como un reporte real de QA para clientes o lideres tecnicos.
+- No inventes informacion no presente en los datos.
+- Si faltan datos importantes, indicalo de forma profesional y breve.
+- Evita repetir metricas innecesariamente.
+
+La estructura debe ser:
+
+1. Estado general del ciclo
+Resumen ejecutivo corto del estado del ciclo.
+
+2. Observaciones relevantes
+Hallazgos importantes sobre cobertura, calidad, estabilidad y automatizacion.
+
+3. Riesgos identificados
+Posibles riesgos tecnicos o de proceso detectados.
+
+4. Recomendaciones
+Acciones sugeridas basadas en los datos actuales.
+
+5. Informacion sugerida para proximos reportes
+Datos adicionales que ayudarian a mejorar el analisis.
+
+El analisis debe basarse unicamente en:
+- metricas del reporte
+- funcionalidades incluidas
+- bugs relacionados
+- resultados de ejecucion
+- modulos impactados
+- nivel de automatizacion
+- cobertura
+- datos del ciclo
+
+Responde solo con el contenido final del analisis, sin notas previas ni cierre adicional.`;
+  }
+
+  if (input.reportType === 'qa-progress-report') {
+    return `Genera un analisis ejecutivo y tecnico del reporte de progreso QA utilizando unicamente los datos suministrados.
+
+${sharedContext}
+
+IMPORTANTE:
+- No uses markdown.
+- No uses asteriscos.
+- No uses lenguaje academico exagerado.
+- No dramatices riesgos.
+- Manten un tono profesional, ejecutivo y claro.
+- Usa parrafos cortos y faciles de leer.
+- Evita repetir metricas innecesariamente.
+- El resultado debe parecer un informe real generado para lideres QA, CTOs o clientes.
+- No inventes informacion que no exista en los datos.
+- Si faltan datos importantes, indicalo de forma breve y profesional.
+
+El analisis debe incluir:
+
+1. Evolucion del sprint
+Resumen breve del comportamiento general entre ciclos.
+
+2. Aspectos destacados
+Hallazgos relevantes sobre estabilidad, cobertura, automatizacion y ejecucion.
+
+3. Riesgos actuales
+Riesgos identificados segun las metricas disponibles.
+
+4. Recomendaciones sugeridas
+Acciones practicas basadas en los resultados del reporte.
+
+5. Informacion adicional recomendada
+Datos que ayudarian a enriquecer futuros analisis.
+
+El analisis debe basarse exclusivamente en:
+- ciclos ejecutados
+- tasa de aprobacion
+- bugs encontrados
+- cobertura
+- automatizacion
+- metricas de evolucion
+- frecuencia de ejecucion
+- funcionalidades incluidas
+- resultados del ciclo
+
+Responde solo con el contenido final del analisis, sin notas previas ni cierre adicional.`;
+  }
+
+  if (input.reportType === 'project-status-report') {
+    return `Genera un analisis ejecutivo y tecnico del estado del proyecto utilizando unicamente los datos suministrados.
+
+${sharedContext}
+
+IMPORTANTE:
+- No uses markdown.
+- No uses asteriscos.
+- No uses lenguaje academico exagerado.
+- No dramatices riesgos.
+- Manten un tono profesional, ejecutivo y claro.
+- Usa parrafos cortos y faciles de leer.
+- Evita repetir metricas innecesariamente.
+- El resultado debe parecer un informe real para lideres QA, gerencia, CTOs o clientes.
+- No inventes informacion que no exista en los datos.
+- Si faltan datos importantes, indicalo de forma breve y profesional.
+
+El analisis debe incluir:
+
+1. Estado general del proyecto
+Resumen breve del avance funcional y del estado global del proyecto.
+
+2. Aspectos destacados
+Hallazgos relevantes sobre cobertura, avance, calidad, automatizacion y composicion del alcance.
+
+3. Riesgos actuales
+Riesgos identificados segun las metricas disponibles, sin sobredimensionarlos.
+
+4. Recomendaciones sugeridas
+Acciones practicas basadas en el estado actual del proyecto.
+
+5. Informacion adicional recomendada
+Datos que ayudarian a enriquecer futuros analisis.
+
+El analisis debe basarse exclusivamente en:
+- avance funcional
+- funcionalidades incluidas
+- casos de prueba
+- bugs activos
+- promedio de ciclos
+- automatizacion
+- riesgos funcionales
+- pruebas pendientes o bloqueadas
+- composicion del alcance
+
+Responde solo con el contenido final del analisis, sin notas previas ni cierre adicional.`;
+  }
+
+  if (input.reportType === 'delivery-unit-progress-report') {
+    return `Genera un analisis ejecutivo y tecnico del progreso por unidad utilizando unicamente los datos suministrados.
+
+${sharedContext}
+
+IMPORTANTE:
+- No uses markdown.
+- No uses asteriscos.
+- No uses lenguaje academico exagerado.
+- No dramatices riesgos.
+- Manten un tono profesional, ejecutivo y claro.
+- Usa parrafos cortos y faciles de leer.
+- Evita repetir metricas innecesariamente.
+- El resultado debe parecer un informe real para lideres QA, responsables del proyecto o clientes.
+- No inventes informacion que no exista en los datos.
+- Si faltan datos importantes, indicalo de forma breve y profesional.
+
+El analisis debe incluir:
+
+1. Estado general de la unidad
+Resumen breve del avance funcional y operativo de la unidad.
+
+2. Aspectos destacados
+Hallazgos relevantes sobre progreso, cobertura, calidad, riesgos y actividades ejecutadas.
+
+3. Riesgos actuales
+Riesgos identificados segun las metricas y el estado del alcance asociado.
+
+4. Recomendaciones sugeridas
+Acciones practicas basadas en el estado actual de la unidad.
+
+5. Informacion adicional recomendada
+Datos que ayudarian a enriquecer futuros analisis.
+
+El analisis debe basarse exclusivamente en:
+- unidad seleccionada
+- actividades realizadas
+- funcionalidades asociadas
+- estados funcionales
+- bugs activos
+- cobertura por casos
+- progreso general
+- riesgo funcional
+- periodo y estado de la unidad
+
+Responde solo con el contenido final del analisis, sin notas previas ni cierre adicional.`;
+  }
+
+  return `Actua como lead QA tecnico y analista de calidad de software.
+Debes producir un analisis tecnico enfocado en el proposito del reporte, usando solo la data suministrada.
+
+${sharedContext}
+
+Instrucciones:
+- Responde en espanol.
+- Usa un tono tecnico, concreto y accionable.
+- Prioriza interpretacion de datos, tendencias, riesgos y decisiones QA.
+- No inventes metricas, integraciones ni causas que no se desprendan del contexto.
+- Si hay vacios de informacion, dilo explicitamente como limitacion del analisis.
+- Adapta el enfoque al tipo de reporte y su finalidad.
+
+Responde solo en Markdown con estas secciones exactas:
+## Lectura tecnica
+## Hallazgos clave
+## Riesgos y alertas
+## Recomendaciones accionables
+## Datos faltantes o validaciones sugeridas`;
 }
 
 async function requestGeminiCompletion(prompt: string, responseMimeType?: 'application/json') {
@@ -653,6 +898,20 @@ Responde solo con JSON valido usando este formato:
             conclusion: normalizeAiText(result?.conclusion),
           };
         },
+      ),
+    );
+  },
+
+  async analyzeTechnicalReport(
+    userId: number,
+    payload: { projectId: string; input: TechnicalReportAnalysisInput },
+  ) {
+    const prompt = buildTechnicalReportPrompt(payload.input);
+
+    return runAiAction(userId, payload.projectId, () =>
+      withAiFallback(
+        async () => (await requestGeminiCompletion(prompt)).trim(),
+        async () => (await requestGroqCompletion(prompt)).trim(),
       ),
     );
   },

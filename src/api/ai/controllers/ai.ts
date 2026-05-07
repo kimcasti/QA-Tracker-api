@@ -53,6 +53,17 @@ type DeliveryUnitSummaryInput = {
   };
 };
 
+type TechnicalReportAnalysisInput = {
+  reportType?: string;
+  reportTitle?: string;
+  reportPurpose?: string;
+  scope?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+  highlights?: unknown[];
+  risks?: unknown[];
+  details?: Record<string, unknown>;
+};
+
 function getData(ctx: any) {
   return (ctx.request.body?.data || ctx.request.body || {}) as Record<string, any>;
 }
@@ -225,6 +236,36 @@ export default {
         projectId,
         input: payload,
       });
+
+    ctx.body = { data: result };
+  },
+
+  async analyzeTechnicalReport(ctx) {
+    const userId = requireUserId(ctx);
+    const data = getData(ctx);
+    const projectId = requireProjectId(data);
+
+    const payload = {
+      reportType: String(data.reportType || '').trim(),
+      reportTitle: String(data.reportTitle || '').trim(),
+      reportPurpose: String(data.reportPurpose || '').trim(),
+      scope: data.scope && typeof data.scope === 'object' ? data.scope : {},
+      metrics: data.metrics && typeof data.metrics === 'object' ? data.metrics : {},
+      highlights: Array.isArray(data.highlights) ? data.highlights : [],
+      risks: Array.isArray(data.risks) ? data.risks : [],
+      details: data.details && typeof data.details === 'object' ? data.details : {},
+    } satisfies TechnicalReportAnalysisInput;
+
+    if (!payload.reportType || !payload.reportTitle || !payload.reportPurpose) {
+      throw new errors.ValidationError(
+        'Report type, title and purpose are required for technical analysis.',
+      );
+    }
+
+    const result = await strapi.service('api::ai.ai').analyzeTechnicalReport(userId, {
+      projectId,
+      input: payload,
+    });
 
     ctx.body = { data: result };
   },
