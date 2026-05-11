@@ -236,7 +236,7 @@ const responsePopulate = {
     fields: ['key'],
   },
   activities: {
-    fields: ['documentId', 'name', 'description', 'isActive'],
+    fields: ['documentId', 'name', 'category', 'isActive'],
   },
   proposal: {
     fields: ['documentId', 'name', 'proposalOwner'],

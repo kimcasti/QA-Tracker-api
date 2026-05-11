@@ -570,6 +570,21 @@ export interface ApiDeliveryActivityTemplateDeliveryActivityTemplate
     draftAndPublish: false;
   };
   attributes: {
+    category: Schema.Attribute.Enumeration<
+      [
+        'Gesti\u00F3n y Gobernanza del Proyecto',
+        'Discovery y Evaluaci\u00F3n Inicial',
+        'Administraci\u00F3n de Infraestructura y Entornos',
+        'Mantenimiento y Soporte T\u00E9cnico',
+        'Desarrollo y Evoluci\u00F3n del Software',
+        'Gesti\u00F3n de Calidad y Control de Pruebas',
+        'Gesti\u00F3n de Seguridad y Cumplimiento',
+        'Gesti\u00F3n de DevOps y Configuraci\u00F3n T\u00E9cnica',
+        'Monitoreo, Optimizaci\u00F3n y Rendimiento',
+        'Documentaci\u00F3n e Informes',
+      ]
+    > &
+      Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -577,7 +592,6 @@ export interface ApiDeliveryActivityTemplateDeliveryActivityTemplate
       'manyToMany',
       'api::delivery-unit.delivery-unit'
     >;
-    description: Schema.Attribute.Text;
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<

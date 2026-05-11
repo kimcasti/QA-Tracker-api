@@ -730,22 +730,22 @@ Responde unicamente con JSON valido usando este formato:
     userId: number,
     input: { projectId: string; input: ProjectInsightInput },
   ) {
-    const prompt = `Actua como consultor senior de gestion de proyectos y QA.
+    const prompt = `Actúa como consultor senior de gestión de proyectos y QA.
 Analiza la siguiente información del proyecto y devuelve recomendaciones útiles en español.
 
 ${buildProjectContext(input.input)}
 
 Necesito una respuesta en Markdown con estas secciones exactas:
 ## Resumen ejecutivo
-## Desafios probables
+## Desafíos probables
 ## Riesgos y dependencias
-## Vacios de definicion
-## Recomendaciones de gestion
+## Vacíos de definición
+## Recomendaciones de gestión
 ## Sugerencias QA
 ## Preguntas para validar con el cliente
 
 Reglas:
-- Se concreto y accionable.
+- Sé concreto y accionable.
 - Enfatiza hallazgos que ayuden a planificar, priorizar y alinear al equipo.
 - No inventes integraciones técnicas no mencionadas.
 - Si falta información, dilo como supuesto o pregunta abierta.

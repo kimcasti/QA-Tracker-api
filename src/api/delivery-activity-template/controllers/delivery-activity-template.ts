@@ -8,7 +8,7 @@ import {
 
 type DeliveryActivityTemplatePayload = {
   name?: string;
-  description?: string | null;
+  category?: string | null;
   isActive?: boolean;
   organization?: unknown;
   project?: unknown;
@@ -36,7 +36,7 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
 function normalizeDeliveryActivityTemplateData(payload: DeliveryActivityTemplatePayload) {
   return {
     name: payload.name || '',
-    description: payload.description || null,
+    category: payload.category || null,
     isActive: typeof payload.isActive === 'boolean' ? payload.isActive : true,
   };
 }
