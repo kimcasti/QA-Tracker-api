@@ -3,6 +3,7 @@ import type { Core } from '@strapi/strapi';
 const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewares => [
   'strapi::logger',
   'strapi::errors',
+  'global::request-context',
   'strapi::security',
   {
     name: 'strapi::cors',
