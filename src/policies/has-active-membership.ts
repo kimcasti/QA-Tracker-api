@@ -10,22 +10,38 @@ type PolicyContext = {
   };
 };
 
-export default async (
-  policyContext: PolicyContext,
-  _config: unknown,
-  { strapi }: { strapi: Core.Strapi }
-) => {
-  const user = policyContext.state.user;
-
-  if (!user) {
-    throw new errors.UnauthorizedError('Authentication is required.');
-  }
-
-  const memberships = await getUserMemberships(strapi, user.id);
-
-  if (memberships.length === 0) {
-    throw new errors.ForbiddenError(await getUserMembershipAccessError(strapi, user.id));
-  }
-
-  return true;
+type MembershipPolicyDependencies = {
+  getUserMemberships: typeof getUserMemberships;
+  getUserMembershipAccessError: typeof getUserMembershipAccessError;
 };
+
+export function createHasActiveMembershipPolicy(
+  dependencies: MembershipPolicyDependencies = {
+    getUserMemberships,
+    getUserMembershipAccessError,
+  },
+) {
+  return async (
+    policyContext: PolicyContext,
+    _config: unknown,
+    { strapi }: { strapi: Core.Strapi },
+  ) => {
+    const user = policyContext.state.user;
+
+    if (!user) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const memberships = await dependencies.getUserMemberships(strapi, user.id);
+
+    if (memberships.length === 0) {
+      throw new errors.ForbiddenError(
+        await dependencies.getUserMembershipAccessError(strapi, user.id),
+      );
+    }
+
+    return true;
+  };
+}
+
+export default createHasActiveMembershipPolicy();
