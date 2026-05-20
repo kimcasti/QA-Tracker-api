@@ -6,7 +6,11 @@ import {
   assertOrganizationFeatureAvailable,
   assertOrganizationLimitAvailable,
 } from '../../../utils/plan-enforcement';
-import { getAllowedOrganizationDocumentIds, getUserMemberships, getUserProjectAccessScope } from '../../../utils/tenant';
+import {
+  getAllowedOrganizationDocumentIds,
+  getUserMemberships,
+  getUserProjectAccessScope,
+} from '../../../utils/tenant';
 
 type ProjectPayload = {
   name?: string;
@@ -33,6 +37,36 @@ type ProjectPayload = {
   proposalOwner?: string | null;
   organization?: string;
 };
+
+type ProjectControllerDependencies = {
+  getUserMemberships: typeof getUserMemberships;
+  getAllowedOrganizationDocumentIds: typeof getAllowedOrganizationDocumentIds;
+  getUserProjectAccessScope: typeof getUserProjectAccessScope;
+  assertOrganizationLimitAvailable: typeof assertOrganizationLimitAvailable;
+  assertOrganizationFeatureAvailable: typeof assertOrganizationFeatureAvailable;
+  getEffectivePlan: typeof getEffectivePlan;
+  adminRoles: readonly string[];
+};
+
+type CreateProjectControllerInput = {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<ProjectControllerDependencies>;
+};
+
+function resolveDependencies(
+  overrides?: Partial<ProjectControllerDependencies>,
+): ProjectControllerDependencies {
+  return {
+    getUserMemberships,
+    getAllowedOrganizationDocumentIds,
+    getUserProjectAccessScope,
+    assertOrganizationLimitAvailable,
+    assertOrganizationFeatureAvailable,
+    getEffectivePlan,
+    adminRoles: ADMIN_ROLES,
+    ...overrides,
+  };
+}
 
 function parseLogoDataUrl(value?: string | null) {
   const match = String(value || '').match(/^data:(.+?);base64,(.+)$/);
@@ -91,16 +125,25 @@ function hasAiProjectPayload(payload: ProjectPayload) {
   return Boolean(payload.aiProjectInsights?.trim() || payload.aiWireframeBrief?.trim());
 }
 
-async function ensureProjectAccess(userId: number, projectDocumentId: string) {
-  const memberships = await getUserMemberships(strapi, userId);
-  const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
-  const projectAccessScope = await getUserProjectAccessScope(strapi, userId, memberships);
+async function ensureProjectAccess(
+  input: CreateProjectControllerInput,
+  userId: number,
+  projectDocumentId: string,
+) {
+  const dependencies = resolveDependencies(input.dependencies);
+  const memberships = await dependencies.getUserMemberships(input.strapi, userId);
+  const allowedOrganizationDocumentIds = dependencies.getAllowedOrganizationDocumentIds(memberships);
+  const projectAccessScope = await dependencies.getUserProjectAccessScope(
+    input.strapi,
+    userId,
+    memberships,
+  );
 
   if (allowedOrganizationDocumentIds.length === 0) {
     throw new errors.ForbiddenError('An active organization membership is required.');
   }
 
-  const project = await strapi.documents('api::project.project').findOne({
+  const project = await input.strapi.documents('api::project.project').findOne({
     documentId: projectDocumentId,
     populate: {
       organization: true,
@@ -128,8 +171,13 @@ async function ensureProjectAccess(userId: number, projectDocumentId: string) {
   return project;
 }
 
-async function resolveOrganizationDocumentId(userId: number, requestedOrganization?: string) {
-  const memberships = await getUserMemberships(strapi, userId);
+async function resolveOrganizationDocumentId(
+  input: CreateProjectControllerInput,
+  userId: number,
+  requestedOrganization?: string,
+) {
+  const dependencies = resolveDependencies(input.dependencies);
+  const memberships = await dependencies.getUserMemberships(input.strapi, userId);
   const allowedOrganizationDocumentIds = memberships
     .map(membership => membership.organization?.documentId)
     .filter((value): value is string => Boolean(value));
@@ -145,8 +193,13 @@ async function resolveOrganizationDocumentId(userId: number, requestedOrganizati
   return allowedOrganizationDocumentIds[0];
 }
 
-async function ensureProjectCreationAllowed(userId: number, requestedOrganization?: string) {
-  const memberships = await getUserMemberships(strapi, userId);
+async function ensureProjectCreationAllowed(
+  input: CreateProjectControllerInput,
+  userId: number,
+  requestedOrganization?: string,
+) {
+  const dependencies = resolveDependencies(input.dependencies);
+  const memberships = await dependencies.getUserMemberships(input.strapi, userId);
   const targetMembership =
     (requestedOrganization
       ? memberships.find(
@@ -161,11 +214,11 @@ async function ensureProjectCreationAllowed(userId: number, requestedOrganizatio
     throw new errors.ForbiddenError('An active organization membership is required.');
   }
 
-  if (!ADMIN_ROLES.includes(roleCode as any)) {
+  if (!dependencies.adminRoles.includes(roleCode as any)) {
     throw new errors.ForbiddenError('Only Owner or QA Lead can create projects.');
   }
 
-  const organization = await strapi.documents('api::organization.organization').findOne({
+  const organization = await input.strapi.documents('api::organization.organization').findOne({
     documentId: organizationDocumentId,
   });
 
@@ -173,8 +226,8 @@ async function ensureProjectCreationAllowed(userId: number, requestedOrganizatio
     throw new errors.NotFoundError('Organization not found.');
   }
 
-  const plan = getEffectivePlan(organization);
-  await assertOrganizationLimitAvailable({
+  const plan = dependencies.getEffectivePlan(organization);
+  await dependencies.assertOrganizationLimitAvailable({
     organizationDocumentId,
     limitKey: 'projects',
     resourceLabel: 'proyectos',
@@ -186,215 +239,227 @@ async function ensureProjectCreationAllowed(userId: number, requestedOrganizatio
   };
 }
 
-export default factories.createCoreController('api::project.project', () => ({
-  async create(ctx) {
-    const userId = ctx.state.user?.id;
+export function createProjectController(input: CreateProjectControllerInput) {
+  const dependencies = resolveDependencies(input.dependencies);
 
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
+  return {
+    async create(ctx) {
+      const userId = ctx.state.user?.id;
 
-    const payload = (ctx.request.body?.data || {}) as ProjectPayload;
-    const { organizationDocumentId, plan } = await ensureProjectCreationAllowed(
-      userId,
-      payload.organization,
-    );
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
 
-    if (hasAiProjectPayload(payload)) {
-      await assertOrganizationFeatureAvailable({
-        organizationDocumentId,
-        feature: 'ai',
-        featureLabel: 'funciones de IA para guardar insights o briefs generados',
-      });
-    }
+      const payload = (ctx.request.body?.data || {}) as ProjectPayload;
+      const { organizationDocumentId } = await ensureProjectCreationAllowed(
+        input,
+        userId,
+        payload.organization,
+      );
 
-    const created = await strapi.documents('api::project.project').create({
-      data: {
-        ...normalizeProjectData(payload),
-        organization: organizationDocumentId,
-      },
-      populate: {
-        organization: true,
-      },
-    });
+      if (hasAiProjectPayload(payload)) {
+        await dependencies.assertOrganizationFeatureAvailable({
+          organizationDocumentId,
+          feature: 'ai',
+          featureLabel: 'funciones de IA para guardar insights o briefs generados',
+        });
+      }
 
-    ctx.body = { data: created };
-  },
-
-  async update(ctx) {
-    const userId = ctx.state.user?.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    const documentId = ctx.params.documentId || ctx.params.id;
-    if (!documentId) {
-      throw new errors.ValidationError('Project documentId is required.');
-    }
-
-    const existing = await strapi.documents('api::project.project').findOne({
-      documentId,
-      populate: {
-        organization: true,
-      },
-    });
-
-    if (!existing) {
-      throw new errors.NotFoundError('Project not found.');
-    }
-
-    const payload = (ctx.request.body?.data || {}) as ProjectPayload;
-    const organizationDocumentId = await resolveOrganizationDocumentId(
-      userId,
-      existing.organization?.documentId || payload.organization,
-    );
-    const organization = await strapi.documents('api::organization.organization').findOne({
-      documentId: organizationDocumentId,
-    });
-
-    if (!organization?.documentId) {
-      throw new errors.NotFoundError('Organization not found.');
-    }
-
-    const plan = getEffectivePlan(organization);
-
-    if (hasAiProjectPayload(payload)) {
-      await assertOrganizationFeatureAvailable({
-        organizationDocumentId,
-        feature: 'ai',
-        featureLabel: 'funciones de IA para guardar insights o briefs generados',
-      });
-    }
-
-    const updated = await strapi.documents('api::project.project').update({
-      documentId,
-      data: {
-        ...normalizeProjectData(payload),
-        organization: organizationDocumentId,
-      },
-      populate: {
-        organization: true,
-      },
-    });
-
-    ctx.body = { data: updated };
-  },
-
-  async storyMap(ctx) {
-    const userId = ctx.state.user?.id;
-    const projectDocumentId = ctx.params.documentId || ctx.params.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    if (!projectDocumentId) {
-      throw new errors.ValidationError('Project documentId is required.');
-    }
-
-    await ensureProjectAccess(userId, projectDocumentId);
-
-    const storyMap = await strapi.documents('api::project-story-map.project-story-map').findFirst({
-      filters: {
-        project: {
-          documentId: {
-            $eq: projectDocumentId,
-          },
+      const created = await input.strapi.documents('api::project.project').create({
+        data: {
+          ...normalizeProjectData(payload),
+          organization: organizationDocumentId,
         },
-      },
-      populate: {
-        organization: true,
-        project: true,
-      },
-    });
-
-    ctx.body = { data: storyMap ?? null };
-  },
-
-  async upsertStoryMap(ctx) {
-    const userId = ctx.state.user?.id;
-    const projectDocumentId = ctx.params.documentId || ctx.params.id;
-    const snapshot = String(ctx.request.body?.data?.snapshot || '').trim();
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    if (!projectDocumentId) {
-      throw new errors.ValidationError('Project documentId is required.');
-    }
-
-    if (!snapshot) {
-      throw new errors.ValidationError('Story Map snapshot is required.');
-    }
-
-    const project = await ensureProjectAccess(userId, projectDocumentId);
-    const organizationDocumentId = project.organization?.documentId;
-
-    if (!organizationDocumentId) {
-      throw new errors.ValidationError('Project organization is required.');
-    }
-
-    const existing = await strapi.documents('api::project-story-map.project-story-map').findFirst({
-      filters: {
-        project: {
-          documentId: {
-            $eq: projectDocumentId,
-          },
+        populate: {
+          organization: true,
         },
-      },
-    });
+      });
 
-    const data = {
-      snapshot,
-      project: projectDocumentId,
-      organization: organizationDocumentId,
-    };
+      ctx.body = { data: created };
+    },
 
-    const saved = existing?.documentId
-      ? await strapi.documents('api::project-story-map.project-story-map').update({
-          documentId: existing.documentId,
-          data,
-          populate: {
-            organization: true,
-            project: true,
+    async update(ctx) {
+      const userId = ctx.state.user?.id;
+
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
+
+      const documentId = ctx.params.documentId || ctx.params.id;
+      if (!documentId) {
+        throw new errors.ValidationError('Project documentId is required.');
+      }
+
+      const existing = await input.strapi.documents('api::project.project').findOne({
+        documentId,
+        populate: {
+          organization: true,
+        },
+      });
+
+      if (!existing) {
+        throw new errors.NotFoundError('Project not found.');
+      }
+
+      const payload = (ctx.request.body?.data || {}) as ProjectPayload;
+      const organizationDocumentId = await resolveOrganizationDocumentId(
+        input,
+        userId,
+        existing.organization?.documentId || payload.organization,
+      );
+      const organization = await input.strapi.documents('api::organization.organization').findOne({
+        documentId: organizationDocumentId,
+      });
+
+      if (!organization?.documentId) {
+        throw new errors.NotFoundError('Organization not found.');
+      }
+
+      if (hasAiProjectPayload(payload)) {
+        await dependencies.assertOrganizationFeatureAvailable({
+          organizationDocumentId,
+          feature: 'ai',
+          featureLabel: 'funciones de IA para guardar insights o briefs generados',
+        });
+      }
+
+      const updated = await input.strapi.documents('api::project.project').update({
+        documentId,
+        data: {
+          ...normalizeProjectData(payload),
+          organization: organizationDocumentId,
+        },
+        populate: {
+          organization: true,
+        },
+      });
+
+      ctx.body = { data: updated };
+    },
+
+    async storyMap(ctx) {
+      const userId = ctx.state.user?.id;
+      const projectDocumentId = ctx.params.documentId || ctx.params.id;
+
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
+
+      if (!projectDocumentId) {
+        throw new errors.ValidationError('Project documentId is required.');
+      }
+
+      await ensureProjectAccess(input, userId, projectDocumentId);
+
+      const storyMap = await input.strapi
+        .documents('api::project-story-map.project-story-map')
+        .findFirst({
+          filters: {
+            project: {
+              documentId: {
+                $eq: projectDocumentId,
+              },
+            },
           },
-        })
-      : await strapi.documents('api::project-story-map.project-story-map').create({
-          data,
           populate: {
             organization: true,
             project: true,
           },
         });
 
-    ctx.body = { data: saved };
-  },
+      ctx.body = { data: storyMap ?? null };
+    },
 
-  async publicLogo(ctx) {
-    const projectDocumentId = ctx.params.documentId || ctx.params.id;
+    async upsertStoryMap(ctx) {
+      const userId = ctx.state.user?.id;
+      const projectDocumentId = ctx.params.documentId || ctx.params.id;
+      const snapshot = String(ctx.request.body?.data?.snapshot || '').trim();
 
-    if (!projectDocumentId) {
-      throw new errors.ValidationError('Project documentId is required.');
-    }
+      if (!userId) {
+        throw new errors.UnauthorizedError('Authentication is required.');
+      }
 
-    const project = await strapi.documents('api::project.project').findOne({
-      documentId: projectDocumentId,
-    });
+      if (!projectDocumentId) {
+        throw new errors.ValidationError('Project documentId is required.');
+      }
 
-    if (!project?.logoDataUrl) {
-      throw new errors.NotFoundError('Project logo not found.');
-    }
+      if (!snapshot) {
+        throw new errors.ValidationError('Story Map snapshot is required.');
+      }
 
-    const parsedLogo = parseLogoDataUrl(project.logoDataUrl);
+      const project = await ensureProjectAccess(input, userId, projectDocumentId);
+      const organizationDocumentId = project.organization?.documentId;
 
-    if (!parsedLogo) {
-      throw new errors.ValidationError('Project logo is not a valid image.');
-    }
+      if (!organizationDocumentId) {
+        throw new errors.ValidationError('Project organization is required.');
+      }
 
-    ctx.set('Cache-Control', 'public, max-age=3600');
-    ctx.type = parsedLogo.mimeType;
-    ctx.body = parsedLogo.buffer;
-  },
-}));
+      const existing = await input.strapi
+        .documents('api::project-story-map.project-story-map')
+        .findFirst({
+          filters: {
+            project: {
+              documentId: {
+                $eq: projectDocumentId,
+              },
+            },
+          },
+        });
+
+      const data = {
+        snapshot,
+        project: projectDocumentId,
+        organization: organizationDocumentId,
+      };
+
+      const saved = existing?.documentId
+        ? await input.strapi.documents('api::project-story-map.project-story-map').update({
+            documentId: existing.documentId,
+            data,
+            populate: {
+              organization: true,
+              project: true,
+            },
+          })
+        : await input.strapi.documents('api::project-story-map.project-story-map').create({
+            data,
+            populate: {
+              organization: true,
+              project: true,
+            },
+          });
+
+      ctx.body = { data: saved };
+    },
+
+    async publicLogo(ctx) {
+      const projectDocumentId = ctx.params.documentId || ctx.params.id;
+
+      if (!projectDocumentId) {
+        throw new errors.ValidationError('Project documentId is required.');
+      }
+
+      const project = await input.strapi.documents('api::project.project').findOne({
+        documentId: projectDocumentId,
+      });
+
+      if (!project?.logoDataUrl) {
+        throw new errors.NotFoundError('Project logo not found.');
+      }
+
+      const parsedLogo = parseLogoDataUrl(project.logoDataUrl);
+
+      if (!parsedLogo) {
+        throw new errors.ValidationError('Project logo is not a valid image.');
+      }
+
+      ctx.set('Cache-Control', 'public, max-age=3600');
+      ctx.type = parsedLogo.mimeType;
+      ctx.body = parsedLogo.buffer;
+    },
+  };
+}
+
+export default factories.createCoreController('api::project.project', () =>
+  createProjectController({ strapi }),
+);

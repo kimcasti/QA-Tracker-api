@@ -27,6 +27,43 @@ type TeamContext = {
   canManage: boolean;
 };
 
+type InviteHandlerDependencies = {
+  ensureOwnerAccess: typeof ensureOwnerAccess;
+  getRoleDbRecord: typeof getRoleDbRecord;
+  assertOrganizationLimitAvailable: typeof assertOrganizationLimitAvailable;
+  getOrganizationDbId: typeof getOrganizationDbId;
+  resolveWorkspaceBranding: typeof resolveWorkspaceBranding;
+  sendInvitationEmail: typeof sendInvitationEmail;
+  setUserBlockedState: typeof setUserBlockedState;
+  buildTeamPayload: typeof buildTeamPayload;
+  getNowIso: () => string;
+};
+
+type CreateInviteHandlerInput = {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<InviteHandlerDependencies>;
+};
+
+type UpdateMemberRoleDependencies = {
+  ensureOwnerAccess: typeof ensureOwnerAccess;
+  getRoleDbRecord: typeof getRoleDbRecord;
+  buildTeamPayload: typeof buildTeamPayload;
+};
+
+type DeactivateMemberDependencies = {
+  ensureOwnerAccess: typeof ensureOwnerAccess;
+  syncUserAccessState: typeof syncUserAccessState;
+  buildTeamPayload: typeof buildTeamPayload;
+  toNumericUserId: typeof toNumericUserId;
+};
+
+type ReactivateMemberDependencies = {
+  ensureManageAccess: typeof ensureManageAccess;
+  setUserBlockedState: typeof setUserBlockedState;
+  buildTeamPayload: typeof buildTeamPayload;
+  toNumericUserId: typeof toNumericUserId;
+};
+
 function normalizeEmail(value: unknown) {
   return String(value || '').trim().toLowerCase();
 }
@@ -289,6 +326,365 @@ async function resolveWorkspaceBranding(
   };
 }
 
+function resolveInviteDependencies(overrides?: Partial<InviteHandlerDependencies>): InviteHandlerDependencies {
+  return {
+    ensureOwnerAccess,
+    getRoleDbRecord,
+    assertOrganizationLimitAvailable,
+    getOrganizationDbId,
+    resolveWorkspaceBranding,
+    sendInvitationEmail,
+    setUserBlockedState,
+    buildTeamPayload,
+    getNowIso: () => new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+export function createInviteHandler(input: CreateInviteHandlerInput) {
+  const dependencies = resolveInviteDependencies(input.dependencies);
+
+  return async function invite(ctx: any) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await dependencies.ensureOwnerAccess(userId);
+    const payload = ctx.request.body?.data || {};
+    const email = normalizeEmail(payload.email);
+    const roleDocumentId = String(payload.roleDocumentId || '').trim();
+    const workspaceProjectDocumentId = String(payload.workspaceProjectDocumentId || '').trim();
+
+    if (!email) {
+      throw new errors.ValidationError('Email is required.');
+    }
+
+    if (!roleDocumentId) {
+      throw new errors.ValidationError('Role is required.');
+    }
+
+    const roleRecord = await dependencies.getRoleDbRecord(
+      roleDocumentId,
+      teamContext.organizationDocumentId,
+    );
+
+    if (!roleRecord || !TEAM_ROLE_CODES.includes(roleRecord.code as TeamRoleCode)) {
+      throw new errors.ValidationError('The selected role is not valid for this organization.');
+    }
+
+    if (requiresProjectAssignment(roleRecord.code) && !workspaceProjectDocumentId) {
+      throw new errors.ValidationError('Manager and Viewer invitations require a project assignment.');
+    }
+
+    const existingUser = await input.strapi.db.query('plugin::users-permissions.user').findOne({
+      where: { email },
+    });
+
+    if (existingUser) {
+      const existingMembership = await input.strapi
+        .documents('api::organization-membership.organization-membership')
+        .findFirst({
+          filters: {
+            organization: { documentId: teamContext.organizationDocumentId },
+            user: { id: existingUser.id },
+            isActive: true,
+          },
+        });
+
+      if (existingMembership) {
+        throw new errors.ValidationError('This email already has active access in the organization.');
+      }
+    }
+
+    const duplicateInvitation = await input.strapi.documents(
+      'api::organization-invitation.organization-invitation' as any,
+    ).findFirst({
+      filters: {
+        organization: { documentId: teamContext.organizationDocumentId },
+        email,
+        status: 'pending',
+      },
+    });
+
+    if (duplicateInvitation) {
+      throw new errors.ValidationError('There is already a pending invitation for this email.');
+    }
+
+    await dependencies.assertOrganizationLimitAvailable({
+      organizationDocumentId: teamContext.organizationDocumentId,
+      limitKey: 'users',
+      resourceLabel: 'usuarios',
+    });
+
+    const organizationId = await dependencies.getOrganizationDbId(teamContext.organizationDocumentId);
+
+    if (!organizationId) {
+      throw new errors.NotFoundError('Organization not found.');
+    }
+
+    const workspaceBranding = await dependencies.resolveWorkspaceBranding(
+      teamContext.organizationDocumentId,
+      workspaceProjectDocumentId || undefined,
+    );
+
+    const created = await input.strapi.db
+      .query('api::organization-invitation.organization-invitation' as any)
+      .create({
+        data: {
+          email,
+          invitedAt: dependencies.getNowIso(),
+          status: 'pending',
+          organization: organizationId,
+          organizationRole: roleRecord.id,
+          invitedBy: userId,
+          workspaceProjectDocumentId: workspaceBranding.workspaceProjectDocumentId || null,
+          workspaceName: workspaceBranding.workspaceName || null,
+        },
+      });
+
+    const invitationDocumentId = created?.documentId;
+    if (!invitationDocumentId) {
+      throw new errors.ApplicationError('The invitation could not be created.');
+    }
+
+    try {
+      await dependencies.sendInvitationEmail({
+        invitationDocumentId,
+        recipientEmail: email,
+        organizationName: teamContext.organizationName,
+        roleName: roleRecord.name,
+        workspaceName: workspaceBranding.workspaceName,
+        workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
+        inviterEmail: ctx.state.user?.email,
+        inviterName: ctx.state.user?.username,
+        invitationStatus: 'new',
+      });
+    } catch (mailError) {
+      input.strapi.log.error(
+        `[organization-team] Failed to send invitation email to ${email}: ${
+          mailError instanceof Error ? mailError.message : String(mailError)
+        }`,
+      );
+
+      await input.strapi.documents('api::organization-invitation.organization-invitation' as any).delete({
+        documentId: invitationDocumentId,
+      });
+
+      throw new errors.ApplicationError(
+        mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
+      );
+    }
+
+    if (existingUser?.id) {
+      await dependencies.setUserBlockedState(existingUser.id, false);
+    }
+
+    ctx.body = await dependencies.buildTeamPayload(userId);
+  };
+}
+
+function resolveUpdateMemberRoleDependencies(
+  overrides?: Partial<UpdateMemberRoleDependencies>,
+): UpdateMemberRoleDependencies {
+  return {
+    ensureOwnerAccess,
+    getRoleDbRecord,
+    buildTeamPayload,
+    ...overrides,
+  };
+}
+
+export function createUpdateMemberRoleHandler(input: {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<UpdateMemberRoleDependencies>;
+}) {
+  const dependencies = resolveUpdateMemberRoleDependencies(input.dependencies);
+
+  return async function updateMemberRole(ctx: any) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await dependencies.ensureOwnerAccess(userId);
+    const membershipDocumentId = String(ctx.params.documentId || '').trim();
+    const roleDocumentId = String(ctx.request.body?.data?.roleDocumentId || '').trim();
+
+    if (!membershipDocumentId || !roleDocumentId) {
+      throw new errors.ValidationError('Membership and role are required.');
+    }
+
+    const membership = await input.strapi
+      .documents('api::organization-membership.organization-membership')
+      .findOne({
+        documentId: membershipDocumentId,
+        populate: {
+          organization: true,
+          user: true,
+        },
+      });
+
+    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
+      throw new errors.NotFoundError('Membership not found.');
+    }
+
+    const roleRecord = await dependencies.getRoleDbRecord(
+      roleDocumentId,
+      teamContext.organizationDocumentId,
+    );
+
+    if (!roleRecord || !TEAM_ROLE_CODES.includes(roleRecord.code as TeamRoleCode)) {
+      throw new errors.ValidationError('The selected role is not valid for this organization.');
+    }
+
+    if (requiresProjectAssignment(roleRecord.code)) {
+      throw new errors.ValidationError(
+        'Manager and Viewer role changes require project assignment support. Re-invite the user with the desired project access.',
+      );
+    }
+
+    await input.strapi.documents('api::organization-membership.organization-membership').update({
+      documentId: membershipDocumentId,
+      data: {
+        organizationRole: roleDocumentId,
+      },
+    });
+
+    ctx.body = await dependencies.buildTeamPayload(userId);
+  };
+}
+
+function resolveDeactivateMemberDependencies(
+  overrides?: Partial<DeactivateMemberDependencies>,
+): DeactivateMemberDependencies {
+  return {
+    ensureOwnerAccess,
+    syncUserAccessState,
+    buildTeamPayload,
+    toNumericUserId,
+    ...overrides,
+  };
+}
+
+export function createDeactivateMemberHandler(input: {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<DeactivateMemberDependencies>;
+}) {
+  const dependencies = resolveDeactivateMemberDependencies(input.dependencies);
+
+  return async function deactivateMember(ctx: any) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await dependencies.ensureOwnerAccess(userId);
+    const membershipDocumentId = String(ctx.params.documentId || '').trim();
+
+    if (!membershipDocumentId) {
+      throw new errors.ValidationError('Membership is required.');
+    }
+
+    const membership = await input.strapi
+      .documents('api::organization-membership.organization-membership')
+      .findOne({
+        documentId: membershipDocumentId,
+        populate: {
+          organization: true,
+          user: true,
+        },
+      });
+
+    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
+      throw new errors.NotFoundError('Membership not found.');
+    }
+
+    if (membership.user?.id === userId) {
+      throw new errors.ValidationError('You cannot deactivate your own access.');
+    }
+
+    await input.strapi.documents('api::organization-membership.organization-membership').update({
+      documentId: membershipDocumentId,
+      data: {
+        isActive: false,
+      },
+    });
+
+    const targetUserId = dependencies.toNumericUserId(membership.user?.id);
+    if (targetUserId) {
+      await dependencies.syncUserAccessState(targetUserId);
+    }
+
+    ctx.body = await dependencies.buildTeamPayload(userId);
+  };
+}
+
+function resolveReactivateMemberDependencies(
+  overrides?: Partial<ReactivateMemberDependencies>,
+): ReactivateMemberDependencies {
+  return {
+    ensureManageAccess,
+    setUserBlockedState,
+    buildTeamPayload,
+    toNumericUserId,
+    ...overrides,
+  };
+}
+
+export function createReactivateMemberHandler(input: {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<ReactivateMemberDependencies>;
+}) {
+  const dependencies = resolveReactivateMemberDependencies(input.dependencies);
+
+  return async function reactivateMember(ctx: any) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await dependencies.ensureManageAccess(userId);
+    const membershipDocumentId = String(ctx.params.documentId || '').trim();
+
+    if (!membershipDocumentId) {
+      throw new errors.ValidationError('Membership is required.');
+    }
+
+    const membership = await input.strapi
+      .documents('api::organization-membership.organization-membership')
+      .findOne({
+        documentId: membershipDocumentId,
+        populate: {
+          organization: true,
+          user: true,
+        },
+      });
+
+    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
+      throw new errors.NotFoundError('Membership not found.');
+    }
+
+    await input.strapi.documents('api::organization-membership.organization-membership').update({
+      documentId: membershipDocumentId,
+      data: {
+        isActive: true,
+      },
+    });
+
+    const targetUserId = dependencies.toNumericUserId(membership.user?.id);
+    if (targetUserId) {
+      await dependencies.setUserBlockedState(targetUserId, false);
+    }
+
+    ctx.body = await dependencies.buildTeamPayload(userId);
+  };
+}
+
 export default {
   async publicInvitation(ctx) {
     const invitationDocumentId = String(ctx.params.documentId || '').trim();
@@ -343,281 +739,19 @@ export default {
   },
 
   async invite(ctx) {
-    const userId = ctx.state.user?.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    const teamContext = await ensureOwnerAccess(userId);
-    const payload = ctx.request.body?.data || {};
-    const email = normalizeEmail(payload.email);
-    const roleDocumentId = String(payload.roleDocumentId || '').trim();
-    const workspaceProjectDocumentId = String(payload.workspaceProjectDocumentId || '').trim();
-
-    if (!email) {
-      throw new errors.ValidationError('Email is required.');
-    }
-
-    if (!roleDocumentId) {
-      throw new errors.ValidationError('Role is required.');
-    }
-
-    const roleRecord = await getRoleDbRecord(roleDocumentId, teamContext.organizationDocumentId);
-
-    if (!roleRecord || !TEAM_ROLE_CODES.includes(roleRecord.code as TeamRoleCode)) {
-      throw new errors.ValidationError('The selected role is not valid for this organization.');
-    }
-
-    if (requiresProjectAssignment(roleRecord.code) && !workspaceProjectDocumentId) {
-      throw new errors.ValidationError('Manager and Viewer invitations require a project assignment.');
-    }
-
-    const existingUser = await strapi.db.query('plugin::users-permissions.user').findOne({
-      where: { email },
-    });
-
-    if (existingUser) {
-      const existingMembership = await strapi
-        .documents('api::organization-membership.organization-membership')
-        .findFirst({
-          filters: {
-            organization: { documentId: teamContext.organizationDocumentId },
-            user: { id: existingUser.id },
-            isActive: true,
-          },
-        });
-
-      if (existingMembership) {
-        throw new errors.ValidationError('This email already has active access in the organization.');
-      }
-    }
-
-    const duplicateInvitation = await strapi.documents(
-      'api::organization-invitation.organization-invitation' as any,
-    ).findFirst({
-      filters: {
-        organization: { documentId: teamContext.organizationDocumentId },
-        email,
-        status: 'pending',
-      },
-    });
-
-    if (duplicateInvitation) {
-      throw new errors.ValidationError('There is already a pending invitation for this email.');
-    }
-
-    await assertOrganizationLimitAvailable({
-      organizationDocumentId: teamContext.organizationDocumentId,
-      limitKey: 'users',
-      resourceLabel: 'usuarios',
-    });
-
-    const organizationId = await getOrganizationDbId(teamContext.organizationDocumentId);
-
-    if (!organizationId) {
-      throw new errors.NotFoundError('Organization not found.');
-    }
-
-    const workspaceBranding = await resolveWorkspaceBranding(
-      teamContext.organizationDocumentId,
-      workspaceProjectDocumentId || undefined,
-    );
-
-    const created = await strapi.db
-      .query('api::organization-invitation.organization-invitation' as any)
-      .create({
-        data: {
-          email,
-          invitedAt: new Date().toISOString(),
-          status: 'pending',
-          organization: organizationId,
-          organizationRole: roleRecord.id,
-          invitedBy: userId,
-          workspaceProjectDocumentId: workspaceBranding.workspaceProjectDocumentId || null,
-          workspaceName: workspaceBranding.workspaceName || null,
-        },
-      });
-
-    const invitationDocumentId = created?.documentId;
-    if (!invitationDocumentId) {
-      throw new errors.ApplicationError('The invitation could not be created.');
-    }
-
-    try {
-      await sendInvitationEmail({
-        invitationDocumentId,
-        recipientEmail: email,
-        organizationName: teamContext.organizationName,
-        roleName: roleRecord.name,
-        workspaceName: workspaceBranding.workspaceName,
-        workspaceLogoUrl: workspaceBranding.workspaceLogoUrl,
-        inviterEmail: ctx.state.user?.email,
-        inviterName: ctx.state.user?.username,
-        invitationStatus: 'new',
-      });
-    } catch (mailError) {
-      strapi.log.error(
-        `[organization-team] Failed to send invitation email to ${email}: ${
-          mailError instanceof Error ? mailError.message : String(mailError)
-        }`,
-      );
-
-      await strapi.documents('api::organization-invitation.organization-invitation' as any).delete({
-        documentId: invitationDocumentId,
-      });
-
-      throw new errors.ApplicationError(
-        mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
-      );
-    }
-
-    if (existingUser?.id) {
-      await setUserBlockedState(existingUser.id, false);
-    }
-
-    ctx.body = await buildTeamPayload(userId);
+    return createInviteHandler({ strapi })(ctx);
   },
 
   async updateMemberRole(ctx) {
-    const userId = ctx.state.user?.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    const teamContext = await ensureOwnerAccess(userId);
-    const membershipDocumentId = String(ctx.params.documentId || '').trim();
-    const roleDocumentId = String(ctx.request.body?.data?.roleDocumentId || '').trim();
-
-    if (!membershipDocumentId || !roleDocumentId) {
-      throw new errors.ValidationError('Membership and role are required.');
-    }
-
-    const membership = await strapi
-      .documents('api::organization-membership.organization-membership')
-      .findOne({
-        documentId: membershipDocumentId,
-        populate: {
-          organization: true,
-          user: true,
-        },
-      });
-
-    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
-      throw new errors.NotFoundError('Membership not found.');
-    }
-
-    const roleRecord = await getRoleDbRecord(roleDocumentId, teamContext.organizationDocumentId);
-
-    if (!roleRecord || !TEAM_ROLE_CODES.includes(roleRecord.code as TeamRoleCode)) {
-      throw new errors.ValidationError('The selected role is not valid for this organization.');
-    }
-
-    if (requiresProjectAssignment(roleRecord.code)) {
-      throw new errors.ValidationError(
-        'Manager and Viewer role changes require project assignment support. Re-invite the user with the desired project access.',
-      );
-    }
-
-    await strapi.documents('api::organization-membership.organization-membership').update({
-      documentId: membershipDocumentId,
-      data: {
-        organizationRole: roleDocumentId,
-      },
-    });
-
-    ctx.body = await buildTeamPayload(userId);
+    return createUpdateMemberRoleHandler({ strapi })(ctx);
   },
 
   async deactivateMember(ctx) {
-    const userId = ctx.state.user?.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    const teamContext = await ensureOwnerAccess(userId);
-    const membershipDocumentId = String(ctx.params.documentId || '').trim();
-
-    if (!membershipDocumentId) {
-      throw new errors.ValidationError('Membership is required.');
-    }
-
-    const membership = await strapi
-      .documents('api::organization-membership.organization-membership')
-      .findOne({
-        documentId: membershipDocumentId,
-        populate: {
-          organization: true,
-          user: true,
-        },
-      });
-
-    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
-      throw new errors.NotFoundError('Membership not found.');
-    }
-
-    if (membership.user?.id === userId) {
-      throw new errors.ValidationError('You cannot deactivate your own access.');
-    }
-
-    await strapi.documents('api::organization-membership.organization-membership').update({
-      documentId: membershipDocumentId,
-      data: {
-        isActive: false,
-      },
-    });
-
-    const targetUserId = toNumericUserId(membership.user?.id);
-    if (targetUserId) {
-      await syncUserAccessState(targetUserId);
-    }
-
-    ctx.body = await buildTeamPayload(userId);
+    return createDeactivateMemberHandler({ strapi })(ctx);
   },
 
   async reactivateMember(ctx) {
-    const userId = ctx.state.user?.id;
-
-    if (!userId) {
-      throw new errors.UnauthorizedError('Authentication is required.');
-    }
-
-    const teamContext = await ensureManageAccess(userId);
-    const membershipDocumentId = String(ctx.params.documentId || '').trim();
-
-    if (!membershipDocumentId) {
-      throw new errors.ValidationError('Membership is required.');
-    }
-
-    const membership = await strapi
-      .documents('api::organization-membership.organization-membership')
-      .findOne({
-        documentId: membershipDocumentId,
-        populate: {
-          organization: true,
-          user: true,
-        },
-      });
-
-    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
-      throw new errors.NotFoundError('Membership not found.');
-    }
-
-    await strapi.documents('api::organization-membership.organization-membership').update({
-      documentId: membershipDocumentId,
-      data: {
-        isActive: true,
-      },
-    });
-
-    const targetUserId = toNumericUserId(membership.user?.id);
-    if (targetUserId) {
-      await setUserBlockedState(targetUserId, false);
-    }
-
-    ctx.body = await buildTeamPayload(userId);
+    return createReactivateMemberHandler({ strapi })(ctx);
   },
 
   async resendInvitation(ctx) {

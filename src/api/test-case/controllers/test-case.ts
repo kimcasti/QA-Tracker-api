@@ -41,6 +41,18 @@ type TestCaseDocumentWithRelations = {
   } | null;
 };
 
+type TestCaseControllerDependencies = {
+  assertOrganizationLimitAvailable: typeof assertOrganizationLimitAvailable;
+  getUserMemberships: typeof getUserMemberships;
+  getAllowedOrganizationDocumentIds: typeof getAllowedOrganizationDocumentIds;
+  getOrganizationDocumentIdFromPayload: typeof getOrganizationDocumentIdFromPayload;
+};
+
+type CreateTestCaseControllerInput = {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<TestCaseControllerDependencies>;
+};
+
 function extractRelationDocumentId(rawValue: unknown): string | null {
   if (!rawValue) return null;
   if (typeof rawValue === 'string') return rawValue;
@@ -82,16 +94,26 @@ const responsePopulate = {
   },
 };
 
-async function resolveOrganizationDocumentId(userId: number, payload: TestCasePayload) {
-  const memberships = await getUserMemberships(strapi, userId);
-  const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
+async function resolveOrganizationDocumentId(
+  input: CreateTestCaseControllerInput,
+  userId: number,
+  payload: TestCasePayload,
+) {
+  const dependencies = {
+    getUserMemberships,
+    getAllowedOrganizationDocumentIds,
+    getOrganizationDocumentIdFromPayload,
+    ...input.dependencies,
+  };
+  const memberships = await dependencies.getUserMemberships(input.strapi, userId);
+  const allowedOrganizationDocumentIds = dependencies.getAllowedOrganizationDocumentIds(memberships);
 
   if (allowedOrganizationDocumentIds.length === 0) {
     throw new errors.ForbiddenError('An active organization membership is required.');
   }
 
-  const requestedOrganizationDocumentId = await getOrganizationDocumentIdFromPayload(
-    strapi,
+  const requestedOrganizationDocumentId = await dependencies.getOrganizationDocumentIdFromPayload(
+    input.strapi,
     'api::test-case.test-case',
     payload as Record<string, unknown>,
   );
@@ -107,6 +129,7 @@ async function resolveOrganizationDocumentId(userId: number, payload: TestCasePa
 }
 
 async function resolveFunctionalityDocumentId(
+  strapiRef: typeof globalThis.strapi,
   rawFunctionality: unknown,
   projectDocumentId: string,
   fallbackDocumentId?: string | null,
@@ -114,7 +137,7 @@ async function resolveFunctionalityDocumentId(
   const requestedDocumentId = extractRelationDocumentId(rawFunctionality);
 
   if (requestedDocumentId) {
-    const functionalityByDocumentId = await strapi
+    const functionalityByDocumentId = await strapiRef
       .documents('api::functionality.functionality')
       .findFirst({
         filters: {
@@ -127,7 +150,7 @@ async function resolveFunctionalityDocumentId(
       return functionalityByDocumentId.documentId;
     }
 
-    const functionalityByCode = await strapi.documents('api::functionality.functionality').findFirst({
+    const functionalityByCode = await strapiRef.documents('api::functionality.functionality').findFirst({
       filters: {
         code: requestedDocumentId,
         project: { documentId: projectDocumentId },
@@ -146,8 +169,14 @@ async function resolveFunctionalityDocumentId(
   return null;
 }
 
-export default factories.createCoreController('api::test-case.test-case', () => ({
-  async find(ctx) {
+export function createTestCaseController(input: CreateTestCaseControllerInput) {
+  const dependencies = {
+    assertOrganizationLimitAvailable,
+    ...input.dependencies,
+  };
+
+  return {
+  async find(this: any, ctx) {
     await this.validateQuery(ctx);
     const sanitizedQuery = await this.sanitizeQuery(ctx);
     const query = {
@@ -157,12 +186,12 @@ export default factories.createCoreController('api::test-case.test-case', () => 
       populate: responsePopulate,
     };
 
-    const { results, pagination } = await strapi.service('api::test-case.test-case').find(query);
+    const { results, pagination } = await input.strapi.service('api::test-case.test-case').find(query);
     const sanitizedResults = await this.sanitizeOutput(results, ctx);
     return this.transformResponse(sanitizedResults, { pagination });
   },
 
-  async findOne(ctx) {
+  async findOne(this: any, ctx) {
     const documentId = ctx.params.documentId || ctx.params.id;
 
     if (!documentId) {
@@ -171,7 +200,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
 
     await this.validateQuery(ctx);
     const sanitizedQuery = await this.sanitizeQuery(ctx);
-    const entity = await strapi.service('api::test-case.test-case').findOne(documentId, {
+    const entity = await input.strapi.service('api::test-case.test-case').findOne(documentId, {
       ...sanitizedQuery,
       populate: responsePopulate,
     });
@@ -194,6 +223,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
     }
 
     const functionalityDocumentId = await resolveFunctionalityDocumentId(
+      input.strapi,
       payload.functionality,
       projectDocumentId,
     );
@@ -202,14 +232,14 @@ export default factories.createCoreController('api::test-case.test-case', () => 
       throw new errors.ValidationError('Test case functionality is required.');
     }
 
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
-    await assertOrganizationLimitAvailable({
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, payload);
+    await dependencies.assertOrganizationLimitAvailable({
       organizationDocumentId,
       limitKey: 'testCases',
       resourceLabel: 'casos de prueba',
     });
 
-    const created = await strapi.documents('api::test-case.test-case').create({
+    const created = await input.strapi.documents('api::test-case.test-case').create({
       data: {
         ...buildTestCaseData(payload),
         organization: organizationDocumentId,
@@ -234,7 +264,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
       throw new errors.ValidationError('Test case documentId is required.');
     }
 
-    const existing = (await strapi.documents('api::test-case.test-case').findOne({
+    const existing = (await input.strapi.documents('api::test-case.test-case').findOne({
       documentId,
       populate: {
         project: {
@@ -259,6 +289,7 @@ export default factories.createCoreController('api::test-case.test-case', () => 
     }
 
     const functionalityDocumentId = await resolveFunctionalityDocumentId(
+      input.strapi,
       payload.functionality,
       projectDocumentId,
       existing.functionality?.documentId ?? null,
@@ -268,13 +299,13 @@ export default factories.createCoreController('api::test-case.test-case', () => 
       throw new errors.ValidationError('Test case functionality is required.');
     }
 
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
       organization: payload.organization ?? existing.organization?.documentId,
     });
 
-    const updated = await strapi.documents('api::test-case.test-case').update({
+    const updated = await input.strapi.documents('api::test-case.test-case').update({
       documentId,
       data: {
         ...buildTestCaseData(payload),
@@ -287,4 +318,9 @@ export default factories.createCoreController('api::test-case.test-case', () => 
 
     ctx.body = { data: updated };
   },
-}));
+  };
+}
+
+export default factories.createCoreController('api::test-case.test-case', () =>
+  createTestCaseController({ strapi }),
+);

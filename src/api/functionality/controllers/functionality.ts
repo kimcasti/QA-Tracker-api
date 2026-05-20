@@ -29,6 +29,18 @@ type FunctionalityPayload = {
   personaRoles?: unknown;
 };
 
+type FunctionalityControllerDependencies = {
+  assertOrganizationLimitAvailable: typeof assertOrganizationLimitAvailable;
+  getUserMemberships: typeof getUserMemberships;
+  getAllowedOrganizationDocumentIds: typeof getAllowedOrganizationDocumentIds;
+  getOrganizationDocumentIdFromPayload: typeof getOrganizationDocumentIdFromPayload;
+};
+
+type CreateFunctionalityControllerInput = {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<FunctionalityControllerDependencies>;
+};
+
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -118,11 +130,12 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
 }
 
 async function findDuplicateFunctionality(
+  strapiRef: typeof globalThis.strapi,
   projectDocumentId: string,
   code: string,
   excludeDocumentId?: string,
 ) {
-  const matches = await strapi.documents('api::functionality.functionality').findMany({
+  const matches = await strapiRef.documents('api::functionality.functionality').findMany({
     filters: {
       code: { $eq: code },
       project: { documentId: { $eq: projectDocumentId } },
@@ -133,16 +146,26 @@ async function findDuplicateFunctionality(
   return matches.find(item => item.documentId !== excludeDocumentId) || null;
 }
 
-async function resolveOrganizationDocumentId(userId: number, payload: FunctionalityPayload) {
-  const memberships = await getUserMemberships(strapi, userId);
-  const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
+async function resolveOrganizationDocumentId(
+  input: CreateFunctionalityControllerInput,
+  userId: number,
+  payload: FunctionalityPayload,
+) {
+  const dependencies = {
+    getUserMemberships,
+    getAllowedOrganizationDocumentIds,
+    getOrganizationDocumentIdFromPayload,
+    ...input.dependencies,
+  };
+  const memberships = await dependencies.getUserMemberships(input.strapi, userId);
+  const allowedOrganizationDocumentIds = dependencies.getAllowedOrganizationDocumentIds(memberships);
 
   if (allowedOrganizationDocumentIds.length === 0) {
     throw new errors.ForbiddenError('An active organization membership is required.');
   }
 
-  const requestedOrganizationDocumentId = await getOrganizationDocumentIdFromPayload(
-    strapi,
+  const requestedOrganizationDocumentId = await dependencies.getOrganizationDocumentIdFromPayload(
+    input.strapi,
     'api::functionality.functionality',
     payload as Record<string, unknown>,
   );
@@ -175,7 +198,13 @@ const responsePopulate = {
   },
 };
 
-export default factories.createCoreController('api::functionality.functionality', () => ({
+export function createFunctionalityController(input: CreateFunctionalityControllerInput) {
+  const dependencies = {
+    assertOrganizationLimitAvailable,
+    ...input.dependencies,
+  };
+
+  return {
   async create(ctx) {
     const userId = ctx.state.user?.id;
 
@@ -196,6 +225,7 @@ export default factories.createCoreController('api::functionality.functionality'
     }
 
     const duplicateFunctionality = await findDuplicateFunctionality(
+      input.strapi,
       projectDocumentId,
       functionalityCode,
     );
@@ -205,14 +235,14 @@ export default factories.createCoreController('api::functionality.functionality'
       );
     }
 
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
-    await assertOrganizationLimitAvailable({
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, payload);
+    await dependencies.assertOrganizationLimitAvailable({
       organizationDocumentId,
       limitKey: 'features',
       resourceLabel: 'funcionalidades',
     });
 
-    const created = await strapi.documents('api::functionality.functionality').create({
+    const created = await input.strapi.documents('api::functionality.functionality').create({
       data: {
         ...buildFunctionalityData({ ...payload, code: functionalityCode }),
         organization: organizationDocumentId,
@@ -236,7 +266,7 @@ export default factories.createCoreController('api::functionality.functionality'
       throw new errors.ValidationError('Functionality documentId is required.');
     }
 
-    const existing = await strapi.documents('api::functionality.functionality').findOne({
+    const existing = await input.strapi.documents('api::functionality.functionality').findOne({
       documentId,
       populate: {
         organization: true,
@@ -262,6 +292,7 @@ export default factories.createCoreController('api::functionality.functionality'
     }
 
     const duplicateFunctionality = await findDuplicateFunctionality(
+      input.strapi,
       projectDocumentId,
       functionalityCode,
       existing.documentId,
@@ -272,13 +303,13 @@ export default factories.createCoreController('api::functionality.functionality'
       );
     }
 
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, {
       ...payload,
       project: payload.project ?? existing.project?.documentId,
       organization: payload.organization ?? existing.organization?.documentId,
     });
 
-    const updated = await strapi.documents('api::functionality.functionality').update({
+    const updated = await input.strapi.documents('api::functionality.functionality').update({
       documentId,
       data: {
         ...buildFunctionalityData({ ...payload, code: functionalityCode }),
@@ -290,4 +321,9 @@ export default factories.createCoreController('api::functionality.functionality'
 
     ctx.body = { data: updated };
   },
-}));
+  };
+}
+
+export default factories.createCoreController('api::functionality.functionality', () =>
+  createFunctionalityController({ strapi }),
+);
