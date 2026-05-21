@@ -95,6 +95,12 @@
       "relation": "oneToMany",
       "target": "api::test-run-result.test-run-result",
       "mappedBy": "testRun"
+    },
+    "publicUatSession": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::public-uat-session.public-uat-session",
+      "mappedBy": "testRun"
     }
   }
 }

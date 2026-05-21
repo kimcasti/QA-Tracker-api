@@ -141,6 +141,9 @@ const summaryPopulate = {
   results: {
     fields: ['result'],
   },
+  publicUatSession: {
+    fields: ['status', 'expiresAt', 'activatedAt', 'completedAt', 'revokedAt'],
+  },
 };
 
 async function resolveOrganizationDocumentId(userId: number, payload: TestRunPayload) {

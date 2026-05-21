@@ -102,6 +102,12 @@
       "relation": "oneToMany",
       "target": "api::meeting-note.meeting-note",
       "mappedBy": "organization"
+    },
+    "publicUatSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::public-uat-session.public-uat-session",
+      "mappedBy": "organization"
     }
   }
 }

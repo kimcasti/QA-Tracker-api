@@ -30,6 +30,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::project.project"
+    },
+    "publicUatSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::public-uat-session.public-uat-session",
+      "mappedBy": "externalParticipant"
     }
   }
 }

@@ -1,0 +1,92 @@
+{
+  "kind": "collectionType",
+  "collectionName": "public_uat_sessions",
+  "info": {
+    "singularName": "public-uat-session",
+    "pluralName": "public-uat-sessions",
+    "displayName": "Public UAT Session"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "active", "completed", "expired", "revoked"],
+      "default": "draft",
+      "required": true
+    },
+    "tokenHash": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "expiresAt": {
+      "type": "datetime"
+    },
+    "activatedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "revokedAt": {
+      "type": "datetime"
+    },
+    "lastAccessedAt": {
+      "type": "datetime"
+    },
+    "participantNameSnapshot": {
+      "type": "string"
+    },
+    "participantEmailSnapshot": {
+      "type": "email"
+    },
+    "deliveryNotes": {
+      "type": "text"
+    },
+    "allowResultEditing": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowEvidenceUpload": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowCommentEditing": {
+      "type": "boolean",
+      "default": true
+    },
+    "completionLocked": {
+      "type": "boolean",
+      "default": false
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "inversedBy": "publicUatSessions",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "publicUatSessions",
+      "required": true
+    },
+    "testRun": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::test-run.test-run",
+      "inversedBy": "publicUatSession",
+      "required": true
+    },
+    "externalParticipant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::external-participant.external-participant",
+      "inversedBy": "publicUatSessions"
+    }
+  }
+}

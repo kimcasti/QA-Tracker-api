@@ -37,6 +37,7 @@ const PROJECT_SCOPED_CONTENT_TYPES = new Set([
   'api::delivery-unit.delivery-unit',
   'api::delivery-activity-template.delivery-activity-template',
   'api::external-participant.external-participant',
+  'api::public-uat-session.public-uat-session',
 ]);
 
 type TenantPolicyContext = {

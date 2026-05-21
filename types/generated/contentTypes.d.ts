@@ -706,6 +706,10 @@ export interface ApiExternalParticipantExternalParticipant
       'api::organization.organization'
     > &
       Schema.Attribute.Required;
+    publicUatSessions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::public-uat-session.public-uat-session'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     role: Schema.Attribute.String;
     sourceProject: Schema.Attribute.Relation<
@@ -1060,6 +1064,10 @@ export interface ApiOrganizationOrganization
       Schema.Attribute.DefaultTo<'active'>;
     planUpdatedAt: Schema.Attribute.DateTime;
     projects: Schema.Attribute.Relation<'oneToMany', 'api::project.project'>;
+    publicUatSessions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::public-uat-session.public-uat-session'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     roles: Schema.Attribute.Relation<
       'oneToMany',
@@ -1368,6 +1376,10 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     >;
     proposalSentAt: Schema.Attribute.Date;
     proposalType: Schema.Attribute.Enumeration<['phases', 'services', 'mixed']>;
+    publicUatSessions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::public-uat-session.public-uat-session'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     purpose: Schema.Attribute.Text;
     serviceBillingPhases: Schema.Attribute.Text;
@@ -1392,6 +1404,71 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     version: Schema.Attribute.String;
+  };
+}
+
+export interface ApiPublicUatSessionPublicUatSession
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'public_uat_sessions';
+  info: {
+    displayName: 'Public UAT Session';
+    pluralName: 'public-uat-sessions';
+    singularName: 'public-uat-session';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    activatedAt: Schema.Attribute.DateTime;
+    allowCommentEditing: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    allowEvidenceUpload: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    allowResultEditing: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    completedAt: Schema.Attribute.DateTime;
+    completionLocked: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deliveryNotes: Schema.Attribute.Text;
+    expiresAt: Schema.Attribute.DateTime;
+    externalParticipant: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::external-participant.external-participant'
+    >;
+    lastAccessedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::public-uat-session.public-uat-session'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    participantEmailSnapshot: Schema.Attribute.Email;
+    participantNameSnapshot: Schema.Attribute.String;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    revokedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'completed', 'expired', 'revoked']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    testRun: Schema.Attribute.Relation<'oneToOne', 'api::test-run.test-run'> &
+      Schema.Attribute.Required;
+    tokenHash: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -1975,6 +2052,10 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<'medium'>;
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
+    publicUatSession: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::public-uat-session.public-uat-session'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     resolution: Schema.Attribute.String;
     results: Schema.Attribute.Relation<
@@ -2537,6 +2618,7 @@ declare module '@strapi/strapi' {
       'api::project-proposal.project-proposal': ApiProjectProposalProjectProposal;
       'api::project-story-map.project-story-map': ApiProjectStoryMapProjectStoryMap;
       'api::project.project': ApiProjectProject;
+      'api::public-uat-session.public-uat-session': ApiPublicUatSessionPublicUatSession;
       'api::sprint.sprint': ApiSprintSprint;
       'api::subscription-event.subscription-event': ApiSubscriptionEventSubscriptionEvent;
       'api::superadmin-audit-log.superadmin-audit-log': ApiSuperadminAuditLogSuperadminAuditLog;

@@ -160,6 +160,12 @@
       "relation": "oneToMany",
       "target": "api::project-proposal.project-proposal",
       "mappedBy": "project"
+    },
+    "publicUatSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::public-uat-session.public-uat-session",
+      "mappedBy": "project"
     }
   }
 }
