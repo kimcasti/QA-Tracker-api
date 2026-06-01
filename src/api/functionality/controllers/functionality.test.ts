@@ -151,7 +151,9 @@ test('functionality create persists normalized data when validation passes', asy
   assert.deepEqual(createdPayload?.data, {
     code: 'AUTH-02',
     name: 'Registro',
+    jiraIssueKey: null,
     jiraTaskUrl: null,
+    jiraIssueType: null,
     testTypes: [],
     isCore: false,
     isRegression: false,

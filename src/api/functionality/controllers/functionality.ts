@@ -10,7 +10,9 @@ import {
 type FunctionalityPayload = {
   code?: string;
   name?: string;
+  jiraIssueKey?: string | null;
   jiraTaskUrl?: string | null;
+  jiraIssueType?: string | null;
   testTypes?: unknown;
   isCore?: boolean;
   isRegression?: boolean;
@@ -97,7 +99,9 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
   const data: Record<string, unknown> = {
     code: payload.code || '',
     name: payload.name || '',
+    jiraIssueKey: payload.jiraIssueKey?.trim() || null,
     jiraTaskUrl: payload.jiraTaskUrl?.trim() || null,
+    jiraIssueType: payload.jiraIssueType?.trim() || null,
     testTypes: Array.isArray(payload.testTypes) ? payload.testTypes : [],
     isCore: Boolean(payload.isCore),
     isRegression: Boolean(payload.isRegression),

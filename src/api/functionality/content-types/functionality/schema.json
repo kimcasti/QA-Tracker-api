@@ -18,7 +18,13 @@
       "type": "string",
       "required": true
     },
+    "jiraIssueKey": {
+      "type": "string"
+    },
     "jiraTaskUrl": {
+      "type": "string"
+    },
+    "jiraIssueType": {
       "type": "string"
     },
     "testTypes": {

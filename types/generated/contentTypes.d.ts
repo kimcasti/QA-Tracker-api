@@ -746,6 +746,8 @@ export interface ApiFunctionalityFunctionality
     isCore: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isRegression: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isSmoke: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    jiraIssueKey: Schema.Attribute.String;
+    jiraIssueType: Schema.Attribute.String;
     jiraTaskUrl: Schema.Attribute.String;
     lastFunctionalChangeAt: Schema.Attribute.Date;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
