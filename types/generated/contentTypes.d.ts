@@ -1852,7 +1852,9 @@ export interface ApiTestCycleTestCycle extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::test-cycle-execution.test-cycle-execution'
     >;
+    exitCriteria: Schema.Attribute.JSON;
     failed: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    identifiedRisks: Schema.Attribute.JSON;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

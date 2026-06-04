@@ -28,6 +28,8 @@ type TestCyclePayload = {
   browserVersion?: string | null;
   osVersion?: string | null;
   resolution?: string | null;
+  identifiedRisks?: string[] | null;
+  exitCriteria?: string[] | null;
   organization?: unknown;
   project?: unknown;
   sprint?: unknown;
@@ -78,6 +80,8 @@ function buildTestCycleData(payload: TestCyclePayload) {
     browserVersion: payload.browserVersion || null,
     osVersion: payload.osVersion || null,
     resolution: payload.resolution || null,
+    identifiedRisks: Array.isArray(payload.identifiedRisks) ? payload.identifiedRisks : [],
+    exitCriteria: Array.isArray(payload.exitCriteria) ? payload.exitCriteria : [],
   };
 
   if (hasOwnProperty(payload, 'sprint')) {
@@ -93,6 +97,17 @@ function normalizeComparableString(value?: string | null) {
 
 function normalizeComparableDate(value?: string | null) {
   return normalizeComparableString(value);
+}
+
+function normalizeComparableArray(value?: string[] | null) {
+  if (!Array.isArray(value)) return '[]';
+
+  return JSON.stringify(
+    value
+      .map(item => item?.trim())
+      .filter(Boolean)
+      .sort(),
+  );
 }
 
 const summaryFields = [
@@ -149,6 +164,12 @@ function hasCycleConfigurationChanges(
   );
   const nextOsVersion = normalizeComparableString(payload.osVersion ?? existing.osVersion);
   const nextResolution = normalizeComparableString(payload.resolution ?? existing.resolution);
+  const nextIdentifiedRisks = normalizeComparableArray(
+    payload.identifiedRisks ?? existing.identifiedRisks,
+  );
+  const nextExitCriteria = normalizeComparableArray(
+    payload.exitCriteria ?? existing.exitCriteria,
+  );
   const nextSprint = normalizeComparableString(
     nextSprintDocumentId ?? existing.sprint?.documentId,
   );
@@ -166,6 +187,8 @@ function hasCycleConfigurationChanges(
     nextBrowserVersion !== normalizeComparableString(existing.browserVersion) ||
     nextOsVersion !== normalizeComparableString(existing.osVersion) ||
     nextResolution !== normalizeComparableString(existing.resolution) ||
+    nextIdentifiedRisks !== normalizeComparableArray(existing.identifiedRisks) ||
+    nextExitCriteria !== normalizeComparableArray(existing.exitCriteria) ||
     nextSprint !== normalizeComparableString(existing.sprint?.documentId)
   );
 }
