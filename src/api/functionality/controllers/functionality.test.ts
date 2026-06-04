@@ -174,3 +174,47 @@ test('functionality create persists normalized data when validation passes', asy
     data: { documentId: 'func-3', code: 'AUTH-02', name: 'Registro' },
   });
 });
+
+test('functionality create accepts an empty persona role set', async () => {
+  let createdPayload: Record<string, any> | null = null;
+
+  const controller = createFunctionalityController({
+    strapi: {
+      documents(uid: string) {
+        if (uid === 'api::functionality.functionality') {
+          return {
+            findMany: async () => [],
+            create: async (input: Record<string, unknown>) => {
+              createdPayload = input;
+              return { documentId: 'func-4', code: 'AUTH-03', name: 'Perfil' };
+            },
+          };
+        }
+
+        throw new Error(`Unexpected uid: ${uid}`);
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => null,
+      assertOrganizationLimitAvailable: async () => ({ effectivePlan: 'starter' }),
+    },
+  });
+
+  const ctx = createCtx({
+    code: 'AUTH-03',
+    name: 'Perfil',
+    project: { documentId: 'proj-1' },
+    personaRoles: {
+      set: [],
+    },
+  });
+
+  await controller.create(ctx as any);
+
+  assert.deepEqual(createdPayload?.data?.personaRoles, {
+    set: [],
+  });
+});

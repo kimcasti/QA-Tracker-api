@@ -74,6 +74,7 @@ function normalizeManyRelation(rawValue: unknown) {
   const value = rawValue as {
     connect?: Array<{ documentId?: string }>;
     disconnect?: Array<{ documentId?: string }>;
+    set?: Array<{ documentId?: string }>;
   };
 
   if (Array.isArray(value.connect)) {
@@ -89,6 +90,12 @@ function normalizeManyRelation(rawValue: unknown) {
       disconnect: value.disconnect.filter(
         (item): item is { documentId: string } => Boolean(item?.documentId),
       ),
+    };
+  }
+
+  if (Array.isArray(value.set)) {
+    return {
+      set: value.set.filter((item): item is { documentId: string } => Boolean(item?.documentId)),
     };
   }
 
