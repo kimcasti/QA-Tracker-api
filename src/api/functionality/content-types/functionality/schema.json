@@ -58,7 +58,12 @@
       "enum": ["critical", "high", "medium", "low"],
       "default": "medium"
     },
-    "riskLevel": {
+    "impactLevel": {
+      "type": "enumeration",
+      "enum": ["high", "medium", "low"],
+      "default": "medium"
+    },
+    "probabilityLevel": {
       "type": "enumeration",
       "enum": ["high", "medium", "low"],
       "default": "medium"

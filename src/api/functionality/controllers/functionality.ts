@@ -21,7 +21,8 @@ type FunctionalityPayload = {
   deliveryDate?: string | null;
   status?: 'completed' | 'failed' | 'in_progress' | 'backlog' | 'mvp' | 'post_mvp';
   priority?: 'critical' | 'high' | 'medium' | 'low';
-  riskLevel?: 'high' | 'medium' | 'low';
+  impactLevel?: 'high' | 'medium' | 'low';
+  probabilityLevel?: 'high' | 'medium' | 'low';
   storyLegacyId?: string | null;
   organization?: unknown;
   project?: unknown;
@@ -117,7 +118,8 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
     deliveryDate: payload.deliveryDate || null,
     status: payload.status || 'backlog',
     priority: payload.priority || 'medium',
-    riskLevel: payload.riskLevel || 'medium',
+    impactLevel: payload.impactLevel || 'medium',
+    probabilityLevel: payload.probabilityLevel || 'medium',
     storyLegacyId: payload.storyLegacyId || null,
   };
 

@@ -162,7 +162,8 @@ test('functionality create persists normalized data when validation passes', asy
     deliveryDate: null,
     status: 'backlog',
     priority: 'medium',
-    riskLevel: 'medium',
+    impactLevel: 'medium',
+    probabilityLevel: 'medium',
     storyLegacyId: null,
     personaRoles: {
       connect: [{ documentId: 'role-1' }, { documentId: 'role-2' }],

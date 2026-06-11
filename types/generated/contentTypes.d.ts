@@ -743,6 +743,8 @@ export interface ApiFunctionalityFunctionality
       'manyToOne',
       'api::delivery-unit.delivery-unit'
     >;
+    impactLevel: Schema.Attribute.Enumeration<['high', 'medium', 'low']> &
+      Schema.Attribute.DefaultTo<'medium'>;
     isCore: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isRegression: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     isSmoke: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
@@ -774,11 +776,11 @@ export interface ApiFunctionalityFunctionality
       ['critical', 'high', 'medium', 'low']
     > &
       Schema.Attribute.DefaultTo<'medium'>;
+    probabilityLevel: Schema.Attribute.Enumeration<['high', 'medium', 'low']> &
+      Schema.Attribute.DefaultTo<'medium'>;
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
-    riskLevel: Schema.Attribute.Enumeration<['high', 'medium', 'low']> &
-      Schema.Attribute.DefaultTo<'medium'>;
     sprint: Schema.Attribute.Relation<'manyToOne', 'api::sprint.sprint'>;
     status: Schema.Attribute.Enumeration<
       ['completed', 'failed', 'in_progress', 'backlog', 'mvp', 'post_mvp']
