@@ -23,6 +23,7 @@ type TestCasePayload = {
     | 'uat';
   priority?: 'critical' | 'high' | 'medium' | 'low';
   isAutomated?: boolean;
+  sortOrder?: number | null;
   organization?: unknown;
   project?: unknown;
   functionality?: unknown;
@@ -30,6 +31,7 @@ type TestCasePayload = {
 
 type TestCaseDocumentWithRelations = {
   documentId: string;
+  sortOrder?: number | null;
   project?: {
     documentId?: string;
   } | null;
@@ -72,7 +74,17 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
   return null;
 }
 
-function buildTestCaseData(payload: TestCasePayload) {
+function buildTestCaseData(
+  payload: TestCasePayload,
+  fallback?: {
+    sortOrder?: number | null;
+  },
+) {
+  const fallbackSortOrder =
+    typeof fallback?.sortOrder === 'number' && Number.isFinite(fallback.sortOrder)
+      ? fallback.sortOrder
+      : 0;
+
   return {
     title: payload.title || '',
     description: payload.description || '',
@@ -82,6 +94,10 @@ function buildTestCaseData(payload: TestCasePayload) {
     testType: payload.testType || 'functional',
     priority: payload.priority || 'medium',
     isAutomated: Boolean(payload.isAutomated),
+    sortOrder:
+      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        ? payload.sortOrder
+        : fallbackSortOrder,
   };
 }
 
@@ -308,7 +324,9 @@ export function createTestCaseController(input: CreateTestCaseControllerInput) {
     const updated = await input.strapi.documents('api::test-case.test-case').update({
       documentId,
       data: {
-        ...buildTestCaseData(payload),
+        ...buildTestCaseData(payload, {
+          sortOrder: existing.sortOrder,
+        }),
         organization: organizationDocumentId,
         project: projectDocumentId,
         functionality: functionalityDocumentId,

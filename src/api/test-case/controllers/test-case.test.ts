@@ -190,6 +190,7 @@ test('test-case create resolves functionality by code and persists normalized pa
     testType: 'functional',
     priority: 'high',
     isAutomated: true,
+    sortOrder: 0,
     organization: 'org-1',
     project: 'proj-1',
     functionality: 'func-auth-01',
