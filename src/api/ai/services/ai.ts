@@ -1,7 +1,7 @@
 import { errors } from '@strapi/utils';
 import { normalizeGeminiError } from '../../../utils/ai-provider-errors';
 
-const GEMINI_MODEL = 'gemini-3-flash-preview';
+const GEMINI_MODEL = 'gemini-3.5-flash';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 type ProjectInsightInput = {
@@ -73,6 +73,16 @@ type TechnicalReportAnalysisInput = {
   details?: Record<string, unknown>;
 };
 
+type GeneratedAiTestCase = {
+  title?: unknown;
+  description?: unknown;
+  preconditions?: unknown;
+  testSteps?: unknown;
+  expectedResult?: unknown;
+  testType?: unknown;
+  priority?: unknown;
+};
+
 function getEnvValue(value: unknown) {
   return String(value || '').trim();
 }
@@ -85,6 +95,10 @@ function getGroqApiKey() {
   return getEnvValue(process.env.GROQ_API_KEY) || getEnvValue(process.env.VITE_GROQ_API_KEY);
 }
 
+function isAiProviderConfigured() {
+  return Boolean(getGeminiApiKey() || getGroqApiKey());
+}
+
 function shouldFallbackToGroq(error: unknown) {
   const raw: any = (error as any)?.error ?? error;
   const status = raw?.status;
@@ -95,11 +109,21 @@ function shouldFallbackToGroq(error: unknown) {
 
   return (
     code === 429 ||
+    code === 404 ||
+    code === 503 ||
+    status === 404 ||
+    status === 503 ||
     status === 'RESOURCE_EXHAUSTED' ||
+    status === 'UNAVAILABLE' ||
     message.includes('quota exceeded') ||
     message.includes('resource_exhausted') ||
     message.includes('rate limit') ||
     message.includes('too many requests') ||
+    message.includes('high demand') ||
+    message.includes('experiencing high demand') ||
+    message.includes('currently overloaded') ||
+    message.includes('model is overloaded') ||
+    message.includes('try again later') ||
     message.includes('api key not valid') ||
     message.includes('reported as leaked')
   );
@@ -171,6 +195,42 @@ function normalizeAiText(value: unknown) {
   }
 
   return String(value);
+}
+
+function normalizeAiLine(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, '');
+}
+
+function normalizeAiTextBlock(value: unknown, options?: { numbered?: boolean }) {
+  if (Array.isArray(value)) {
+    const items = value.map(normalizeAiLine).filter(Boolean);
+
+    if (items.length === 0) {
+      return '';
+    }
+
+    if (options?.numbered) {
+      return items.map((item, index) => `${index + 1}. ${item}`).join('\n');
+    }
+
+    return items.join('\n');
+  }
+
+  return normalizeAiLine(value);
+}
+
+function normalizeGeneratedTestCase(testCase: GeneratedAiTestCase) {
+  return {
+    title: normalizeAiTextBlock(testCase?.title),
+    description: normalizeAiTextBlock(testCase?.description),
+    preconditions: normalizeAiTextBlock(testCase?.preconditions),
+    testSteps: normalizeAiTextBlock(testCase?.testSteps, { numbered: true }),
+    expectedResult: normalizeAiTextBlock(testCase?.expectedResult),
+    testType: normalizeAiTextBlock(testCase?.testType) || 'Funcional',
+    priority: normalizeAiTextBlock(testCase?.priority) || 'Medio',
+  };
 }
 
 function buildTechnicalReportPrompt(input: TechnicalReportAnalysisInput) {
@@ -565,6 +625,16 @@ async function runAiAction<T>(userId: number, projectId: string, action: () => P
 }
 
 export default () => ({
+  getProviderStatus() {
+    return {
+      configured: isAiProviderConfigured(),
+      providers: {
+        gemini: Boolean(getGeminiApiKey()),
+        groq: Boolean(getGroqApiKey()),
+      },
+    };
+  },
+
   async generateTestCases(
     userId: number,
     input: { projectId: string; functionalityName: string; moduleName: string },
@@ -591,7 +661,8 @@ Usa priority solo de esta lista: Crítico, Alto, Medio, Bajo.`;
         async () => {
           const text = await requestGeminiCompletion(prompt, 'application/json');
           const parsed = extractJsonPayload<any>(text);
-          return Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
+          const normalized = Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
+          return normalized.map(item => normalizeGeneratedTestCase(item));
         },
         async () => {
           const parsed = extractJsonPayload<any>(
@@ -599,7 +670,8 @@ Usa priority solo de esta lista: Crítico, Alto, Medio, Bajo.`;
               `${prompt}\n\nResponde unicamente con JSON valido. No uses Markdown ni texto adicional.`,
             ),
           );
-          return Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
+          const normalized = Array.isArray(parsed) ? parsed.slice(0, 1) : [parsed];
+          return normalized.map(item => normalizeGeneratedTestCase(item));
         },
       ),
     );

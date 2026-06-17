@@ -89,6 +89,13 @@ function requireProjectId(data: Record<string, any>) {
 }
 
 export default {
+  async providerStatus(ctx) {
+    requireUserId(ctx);
+    ctx.body = {
+      data: strapi.service('api::ai.ai').getProviderStatus(),
+    };
+  },
+
   async generateTestCases(ctx) {
     const userId = requireUserId(ctx);
     const data = getData(ctx);

@@ -1,6 +1,15 @@
 export default {
   routes: [
     {
+      method: 'GET',
+      path: '/ai/provider-status',
+      handler: 'ai.providerStatus',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
+    {
       method: 'POST',
       path: '/ai/test-cases/generate',
       handler: 'ai.generateTestCases',
