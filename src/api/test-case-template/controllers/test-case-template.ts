@@ -15,12 +15,21 @@ type TestCaseTemplatePayload = {
   testType?: 'integration' | 'functional' | 'sanity' | 'regression' | 'smoke' | 'exploratory' | 'uat';
   priority?: 'critical' | 'high' | 'medium' | 'low';
   isAutomated?: boolean;
+  automationStatus?: 'not_automated' | 'candidate' | 'automated' | 'obsolete';
+  automationType?: 'ui' | 'api' | 'integration' | 'performance';
+  automationTool?: 'playwright' | 'cypress' | 'postman' | 'k6' | 'webdriverio' | 'other';
+  automationReference?: string;
+  automationOwner?: string;
   organization?: unknown;
   project?: unknown;
   module?: unknown;
 };
 
 function normalizeTemplateData(payload: TestCaseTemplatePayload) {
+  const automationStatus =
+    payload.automationStatus || (payload.isAutomated ? 'automated' : 'not_automated');
+  const isAutomated = automationStatus === 'automated';
+
   return {
     name: payload.name || '',
     description: payload.description || '',
@@ -29,7 +38,12 @@ function normalizeTemplateData(payload: TestCaseTemplatePayload) {
     expectedResult: payload.expectedResult || '',
     testType: payload.testType || 'functional',
     priority: payload.priority || 'medium',
-    isAutomated: Boolean(payload.isAutomated),
+    isAutomated,
+    automationStatus,
+    automationType: payload.automationType || null,
+    automationTool: payload.automationTool || null,
+    automationReference: payload.automationReference?.trim() || null,
+    automationOwner: payload.automationOwner?.trim() || null,
   };
 }
 

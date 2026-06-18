@@ -23,6 +23,13 @@ type TestCasePayload = {
     | 'uat';
   priority?: 'critical' | 'high' | 'medium' | 'low';
   isAutomated?: boolean;
+  automationStatus?: 'not_automated' | 'candidate' | 'automated' | 'obsolete';
+  automationType?: 'ui' | 'api' | 'integration' | 'performance';
+  automationTool?: 'playwright' | 'cypress' | 'postman' | 'k6' | 'webdriverio' | 'other';
+  automationReference?: string;
+  automationOwner?: string;
+  lastAutomationStatus?: 'passed' | 'failed' | 'skipped' | 'unknown';
+  lastAutomationRunAt?: string | null;
   sortOrder?: number | null;
   organization?: unknown;
   project?: unknown;
@@ -80,6 +87,9 @@ function buildTestCaseData(
     sortOrder?: number | null;
   },
 ) {
+  const automationStatus =
+    payload.automationStatus || (payload.isAutomated ? 'automated' : 'not_automated');
+  const isAutomated = automationStatus === 'automated';
   const fallbackSortOrder =
     typeof fallback?.sortOrder === 'number' && Number.isFinite(fallback.sortOrder)
       ? fallback.sortOrder
@@ -93,7 +103,14 @@ function buildTestCaseData(
     expectedResult: payload.expectedResult || '',
     testType: payload.testType || 'functional',
     priority: payload.priority || 'medium',
-    isAutomated: Boolean(payload.isAutomated),
+    isAutomated,
+    automationStatus,
+    automationType: payload.automationType || null,
+    automationTool: payload.automationTool || null,
+    automationReference: payload.automationReference?.trim() || null,
+    automationOwner: payload.automationOwner?.trim() || null,
+    lastAutomationStatus: payload.lastAutomationStatus || 'unknown',
+    lastAutomationRunAt: payload.lastAutomationRunAt || null,
     sortOrder:
       typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
         ? payload.sortOrder

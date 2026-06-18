@@ -1643,6 +1643,18 @@ export interface ApiTestCaseTemplateTestCaseTemplate
     draftAndPublish: false;
   };
   attributes: {
+    automationOwner: Schema.Attribute.String;
+    automationReference: Schema.Attribute.String;
+    automationStatus: Schema.Attribute.Enumeration<
+      ['not_automated', 'candidate', 'automated', 'obsolete']
+    > &
+      Schema.Attribute.DefaultTo<'not_automated'>;
+    automationTool: Schema.Attribute.Enumeration<
+      ['playwright', 'cypress', 'postman', 'k6', 'webdriverio', 'other']
+    >;
+    automationType: Schema.Attribute.Enumeration<
+      ['ui', 'api', 'integration', 'performance']
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1704,6 +1716,18 @@ export interface ApiTestCaseTestCase extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    automationOwner: Schema.Attribute.String;
+    automationReference: Schema.Attribute.String;
+    automationStatus: Schema.Attribute.Enumeration<
+      ['not_automated', 'candidate', 'automated', 'obsolete']
+    > &
+      Schema.Attribute.DefaultTo<'not_automated'>;
+    automationTool: Schema.Attribute.Enumeration<
+      ['playwright', 'cypress', 'postman', 'k6', 'webdriverio', 'other']
+    >;
+    automationType: Schema.Attribute.Enumeration<
+      ['ui', 'api', 'integration', 'performance']
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1715,6 +1739,11 @@ export interface ApiTestCaseTestCase extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Required;
     isAutomated: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    lastAutomationRunAt: Schema.Attribute.DateTime;
+    lastAutomationStatus: Schema.Attribute.Enumeration<
+      ['passed', 'failed', 'skipped', 'unknown']
+    > &
+      Schema.Attribute.DefaultTo<'unknown'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

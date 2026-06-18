@@ -176,7 +176,13 @@ test('test-case create resolves functionality by code and persists normalized pa
     project: { documentId: 'proj-1' },
     functionality: 'AUTH-01',
     priority: 'high',
-    isAutomated: true,
+    automationStatus: 'automated',
+    automationType: 'ui',
+    automationTool: 'playwright',
+    automationReference: 'tests/auth/login.spec.ts',
+    automationOwner: 'Equipo QA',
+    lastAutomationStatus: 'passed',
+    lastAutomationRunAt: '2026-06-17T15:00:00.000Z',
   });
 
   await controller.create(ctx as any);
@@ -190,6 +196,13 @@ test('test-case create resolves functionality by code and persists normalized pa
     testType: 'functional',
     priority: 'high',
     isAutomated: true,
+    automationStatus: 'automated',
+    automationType: 'ui',
+    automationTool: 'playwright',
+    automationReference: 'tests/auth/login.spec.ts',
+    automationOwner: 'Equipo QA',
+    lastAutomationStatus: 'passed',
+    lastAutomationRunAt: '2026-06-17T15:00:00.000Z',
     sortOrder: 0,
     organization: 'org-1',
     project: 'proj-1',
