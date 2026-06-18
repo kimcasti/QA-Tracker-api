@@ -24,6 +24,7 @@ type FunctionalityPayload = {
   impactLevel?: 'high' | 'medium' | 'low';
   probabilityLevel?: 'high' | 'medium' | 'low';
   storyLegacyId?: string | null;
+  sortOrder?: number | null;
   organization?: unknown;
   project?: unknown;
   module?: unknown;
@@ -121,6 +122,10 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
     impactLevel: payload.impactLevel || 'medium',
     probabilityLevel: payload.probabilityLevel || 'medium',
     storyLegacyId: payload.storyLegacyId || null,
+    sortOrder:
+      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        ? payload.sortOrder
+        : 0,
   };
 
   if (hasOwnProperty(payload, 'module')) {

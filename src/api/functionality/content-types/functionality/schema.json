@@ -106,6 +106,10 @@
       "relation": "manyToOne",
       "target": "api::delivery-unit.delivery-unit",
       "inversedBy": "functionalities"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
     }
   }
 }

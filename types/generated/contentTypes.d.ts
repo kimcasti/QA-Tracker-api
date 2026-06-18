@@ -781,6 +781,7 @@ export interface ApiFunctionalityFunctionality
     project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     sprint: Schema.Attribute.Relation<'manyToOne', 'api::sprint.sprint'>;
     status: Schema.Attribute.Enumeration<
       ['completed', 'failed', 'in_progress', 'backlog', 'mvp', 'post_mvp']
