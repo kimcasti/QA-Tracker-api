@@ -2067,6 +2067,8 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
     deviceType: Schema.Attribute.Enumeration<['desktop', 'mobile', 'tablet']>;
     environment: Schema.Attribute.Enumeration<['test', 'local', 'production']>;
     executionDate: Schema.Attribute.Date;
+    exitCriteria: Schema.Attribute.JSON;
+    identifiedRisks: Schema.Attribute.JSON;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

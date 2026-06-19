@@ -66,6 +66,12 @@
     "resolution": {
       "type": "string"
     },
+    "identifiedRisks": {
+      "type": "json"
+    },
+    "exitCriteria": {
+      "type": "json"
+    },
     "selectedModules": {
       "type": "json"
     },
