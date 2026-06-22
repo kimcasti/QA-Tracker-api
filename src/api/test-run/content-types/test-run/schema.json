@@ -102,6 +102,12 @@
       "target": "api::test-run-result.test-run-result",
       "mappedBy": "testRun"
     },
+    "automationImportHistories": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::automation-import-history.automation-import-history",
+      "mappedBy": "testRun"
+    },
     "publicUatSession": {
       "type": "relation",
       "relation": "oneToOne",

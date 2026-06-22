@@ -430,6 +430,58 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAutomationImportHistoryAutomationImportHistory
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'automation_import_histories';
+  info: {
+    displayName: 'Automation Import History';
+    pluralName: 'automation-import-histories';
+    singularName: 'automation-import-history';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    duplicateReferenceCount: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    importedAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-import-history.automation-import-history'
+    > &
+      Schema.Attribute.Private;
+    matchedCases: Schema.Attribute.JSON;
+    matchedCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    missingReferenceCount: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    testRun: Schema.Attribute.Relation<'manyToOne', 'api::test-run.test-run'> &
+      Schema.Attribute.Required;
+    tool: Schema.Attribute.Enumeration<
+      ['playwright', 'cypress', 'postman', 'k6', 'webdriverio', 'other']
+    > &
+      Schema.Attribute.Required;
+    unmatchedExecutionCount: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    unmatchedReportReferenceCount: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiBillingRequestBillingRequest
   extends Struct.CollectionTypeSchema {
   collectionName: 'billing_requests';
@@ -2055,6 +2107,10 @@ export interface ApiTestRunTestRun extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    automationImportHistories: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-import-history.automation-import-history'
+    >;
     browser: Schema.Attribute.Enumeration<
       ['chrome', 'firefox', 'edge', 'safari']
     >;
@@ -2638,6 +2694,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::automation-import-history.automation-import-history': ApiAutomationImportHistoryAutomationImportHistory;
       'api::billing-request.billing-request': ApiBillingRequestBillingRequest;
       'api::bug.bug': ApiBugBug;
       'api::delivery-activity-template.delivery-activity-template': ApiDeliveryActivityTemplateDeliveryActivityTemplate;
