@@ -1,0 +1,65 @@
+{
+  "kind": "collectionType",
+  "collectionName": "automation_import_histories",
+  "info": {
+    "singularName": "automation-import-history",
+    "pluralName": "automation-import-histories",
+    "displayName": "Automation Import History"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "tool": {
+      "type": "enumeration",
+      "enum": ["playwright", "cypress", "postman", "k6", "webdriverio", "other"],
+      "required": true
+    },
+    "importedAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "matchedCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "missingReferenceCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "unmatchedExecutionCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "unmatchedReportReferenceCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "duplicateReferenceCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "matchedCases": {
+      "type": "json"
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "required": true
+    },
+    "testRun": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::test-run.test-run",
+      "inversedBy": "automationImportHistories",
+      "required": true
+    }
+  }
+}

@@ -22,6 +22,8 @@ type TestRunPayload = {
   browserVersion?: string | null;
   osVersion?: string | null;
   resolution?: string | null;
+  identifiedRisks?: unknown;
+  exitCriteria?: unknown;
   selectedModules?: unknown;
   selectedFunctionalities?: unknown;
   organization?: unknown;
@@ -103,6 +105,8 @@ function buildTestRunData(payload: TestRunPayload, sprintDocumentId?: string | n
     browserVersion: payload.browserVersion || null,
     osVersion: payload.osVersion || null,
     resolution: payload.resolution || null,
+    identifiedRisks: Array.isArray(payload.identifiedRisks) ? payload.identifiedRisks : [],
+    exitCriteria: Array.isArray(payload.exitCriteria) ? payload.exitCriteria : [],
     selectedModules: Array.isArray(payload.selectedModules) ? payload.selectedModules : [],
     selectedFunctionalities: Array.isArray(payload.selectedFunctionalities)
       ? payload.selectedFunctionalities
@@ -127,6 +131,8 @@ const summaryFields = [
   'tester',
   'buildVersion',
   'environment',
+  'identifiedRisks',
+  'exitCriteria',
   'selectedModules',
   'selectedFunctionalities',
 ] as const;

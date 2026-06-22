@@ -40,6 +40,33 @@
       "type": "boolean",
       "default": false
     },
+    "automationStatus": {
+      "type": "enumeration",
+      "enum": ["not_automated", "candidate", "automated", "obsolete"],
+      "default": "not_automated"
+    },
+    "automationType": {
+      "type": "enumeration",
+      "enum": ["ui", "api", "integration", "performance"]
+    },
+    "automationTool": {
+      "type": "enumeration",
+      "enum": ["playwright", "cypress", "postman", "k6", "webdriverio", "other"]
+    },
+    "automationReference": {
+      "type": "string"
+    },
+    "automationOwner": {
+      "type": "string"
+    },
+    "lastAutomationStatus": {
+      "type": "enumeration",
+      "enum": ["passed", "failed", "skipped", "unknown"],
+      "default": "unknown"
+    },
+    "lastAutomationRunAt": {
+      "type": "datetime"
+    },
     "sortOrder": {
       "type": "integer",
       "default": 0

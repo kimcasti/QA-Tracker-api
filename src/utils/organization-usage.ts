@@ -1,5 +1,9 @@
 import { getCurrentUsageMonthKey, getUsagePeriodEnd, getUsagePeriodStart } from './billing-period';
 
+function toDateOnly(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
 async function countProjectsForOrganization(organizationDocumentId: string) {
   return strapi.db.query('api::project.project').count({
     where: {
@@ -92,8 +96,8 @@ export async function recomputeOrganizationUsageSnapshot(
 
   const payload = {
     monthKey,
-    periodStart: getUsagePeriodStart(now).toISOString(),
-    periodEnd: getUsagePeriodEnd(now).toISOString(),
+    periodStart: toDateOnly(getUsagePeriodStart(now)),
+    periodEnd: toDateOnly(getUsagePeriodEnd(now)),
     projectsCount,
     usersCount: activeMembershipsCount + pendingInvitationsCount,
     functionalitiesCount,
