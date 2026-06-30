@@ -31,6 +31,90 @@ type ExecutionRecommendation = {
   reason: string;
 };
 
+type QaStrategyCandidateCategory =
+  | 'ui_automation'
+  | 'api_postman'
+  | 'performance_k6'
+  | 'already_covered'
+  | 'not_recommended';
+
+type QaStrategyCandidatePriority = 'high' | 'medium' | 'low';
+
+type QaStrategyCandidateTool = 'playwright' | 'postman' | 'k6' | 'none';
+
+type QaStrategyCandidateAutomationType =
+  | 'ui'
+  | 'api'
+  | 'integration'
+  | 'performance'
+  | 'none';
+
+type QaStrategyCandidateInput = {
+  id: string;
+  name: string;
+  module: string;
+  priority: string;
+  riskLevel: string;
+  status: string;
+  isCore: boolean;
+  isRegression: boolean;
+  isSmoke: boolean;
+  lastFunctionalChangeAt?: string;
+  coverage: {
+    totalCases?: number;
+    automatedCases?: number;
+    candidateCases?: number;
+    manualCases?: number;
+  };
+  testCases: Array<{
+    id: string;
+    title: string;
+    testType: string;
+    priority: string;
+    automationStatus: string;
+    automationType?: string | null;
+    automationTool?: string | null;
+    summary?: string;
+  }>;
+};
+
+type QaStrategyCandidateRecommendation = {
+  functionalityId: string;
+  functionalityName: string;
+  module: string;
+  recommendedCategory: QaStrategyCandidateCategory;
+  suggestedAutomationType: QaStrategyCandidateAutomationType;
+  recommendedTool: QaStrategyCandidateTool;
+  score: number;
+  priority: QaStrategyCandidatePriority;
+  reasons: string[];
+  currentCoverage: {
+    totalCases: number;
+    automatedCases: number;
+    candidateCases: number;
+    manualCases: number;
+  };
+  relatedTestCases: QaStrategyRelatedTestCase[];
+};
+
+type QaStrategyRelatedTestCase = {
+  id: string;
+  title: string;
+  automationStatus?: string | null;
+};
+
+type QaStrategyCandidateAnalysisResult = {
+  summary: {
+    uiAutomation: number;
+    apiPostman: number;
+    performanceK6: number;
+    alreadyCovered: number;
+    notRecommended: number;
+  };
+  recommendations: QaStrategyCandidateRecommendation[];
+  generatedAt: string;
+};
+
 type DeliveryUnitSummaryInput = {
   deliveryUnit: {
     name: string;
@@ -230,6 +314,226 @@ function normalizeGeneratedTestCase(testCase: GeneratedAiTestCase) {
     expectedResult: normalizeAiTextBlock(testCase?.expectedResult),
     testType: normalizeAiTextBlock(testCase?.testType) || 'Funcional',
     priority: normalizeAiTextBlock(testCase?.priority) || 'Medio',
+  };
+}
+
+function normalizeQaStrategyCategory(value: unknown): QaStrategyCandidateCategory {
+  const normalized = String(value || '').trim();
+
+  switch (normalized) {
+    case 'ui_automation':
+    case 'api_postman':
+    case 'performance_k6':
+    case 'already_covered':
+    case 'not_recommended':
+      return normalized;
+    default:
+      return 'not_recommended';
+  }
+}
+
+function normalizeQaStrategyTool(value: unknown): QaStrategyCandidateTool {
+  const normalized = String(value || '').trim();
+
+  switch (normalized) {
+    case 'playwright':
+    case 'postman':
+    case 'k6':
+    case 'none':
+      return normalized;
+    default:
+      return 'none';
+  }
+}
+
+function normalizeQaStrategyAutomationType(value: unknown): QaStrategyCandidateAutomationType {
+  const normalized = String(value || '').trim();
+
+  switch (normalized) {
+    case 'ui':
+    case 'api':
+    case 'integration':
+    case 'performance':
+    case 'none':
+      return normalized;
+    default:
+      return 'none';
+  }
+}
+
+function deriveAutomationTypeFromCategory(
+  category: QaStrategyCandidateCategory,
+): QaStrategyCandidateAutomationType {
+  switch (category) {
+    case 'ui_automation':
+      return 'ui';
+    case 'api_postman':
+      return 'api';
+    case 'performance_k6':
+      return 'performance';
+    case 'already_covered':
+    case 'not_recommended':
+    default:
+      return 'none';
+  }
+}
+
+function normalizeQaStrategyPriority(value: unknown): QaStrategyCandidatePriority {
+  const normalized = String(value || '').trim();
+
+  switch (normalized) {
+    case 'high':
+    case 'medium':
+    case 'low':
+      return normalized;
+    default:
+      return 'medium';
+  }
+}
+
+function normalizeQaStrategyReasons(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(item => normalizeAiLine(item))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function normalizeQaStrategyAnalysisResult(
+  payload: unknown,
+  functionalities: QaStrategyCandidateInput[],
+): QaStrategyCandidateAnalysisResult {
+  const rawRecommendations = Array.isArray((payload as any)?.recommendations)
+    ? ((payload as any).recommendations as Array<Record<string, unknown>>)
+    : [];
+
+  const functionalityMap = new Map(functionalities.map(item => [item.id, item]));
+
+  const normalizeRelatedTestCases = (
+    value: unknown,
+    fallback: QaStrategyCandidateInput['testCases'],
+  ): QaStrategyRelatedTestCase[] => {
+    if (Array.isArray(value)) {
+      return value
+        .map(testCase => {
+          const item = testCase as Record<string, unknown>;
+
+          return {
+            id: normalizeAiLine(item?.id),
+            title: normalizeAiLine(item?.title),
+            automationStatus: normalizeAiLine(item?.automationStatus) || null,
+          } satisfies QaStrategyRelatedTestCase;
+        })
+        .filter(testCase => testCase.id && testCase.title)
+        .slice(0, 6);
+    }
+
+    return fallback.slice(0, 6).map(testCase => ({
+      id: testCase.id,
+      title: testCase.title,
+      automationStatus: testCase.automationStatus || null,
+    }));
+  };
+
+  const recommendations = rawRecommendations
+    .map(item => {
+      const functionalityId = normalizeAiLine(item?.functionalityId);
+      const source = functionalityMap.get(functionalityId);
+      if (!functionalityId || !source) return null;
+
+      const recommendedCategory = normalizeQaStrategyCategory(item?.recommendedCategory);
+
+      return {
+        functionalityId,
+        functionalityName: source.name,
+        module: source.module,
+        recommendedCategory,
+        suggestedAutomationType:
+          normalizeQaStrategyAutomationType(item?.suggestedAutomationType) !== 'none'
+            ? normalizeQaStrategyAutomationType(item?.suggestedAutomationType)
+            : deriveAutomationTypeFromCategory(recommendedCategory),
+        recommendedTool: normalizeQaStrategyTool(item?.recommendedTool),
+        score: Math.max(0, Math.min(Number(item?.score) || 0, 100)),
+        priority: normalizeQaStrategyPriority(item?.priority),
+        reasons: normalizeQaStrategyReasons(item?.reasons),
+        currentCoverage: {
+          totalCases: Number(source.coverage?.totalCases) || 0,
+          automatedCases: Number(source.coverage?.automatedCases) || 0,
+          candidateCases: Number(source.coverage?.candidateCases) || 0,
+          manualCases: Number(source.coverage?.manualCases) || 0,
+        },
+        relatedTestCases: normalizeRelatedTestCases(item?.relatedTestCases, source.testCases),
+      } satisfies QaStrategyCandidateRecommendation;
+    })
+    .filter((item): item is QaStrategyCandidateRecommendation => Boolean(item));
+
+  const existingIds = new Set(recommendations.map(item => item.functionalityId));
+  for (const functionality of functionalities) {
+    if (existingIds.has(functionality.id)) continue;
+
+    recommendations.push({
+      functionalityId: functionality.id,
+      functionalityName: functionality.name,
+      module: functionality.module,
+      recommendedCategory: 'not_recommended',
+      suggestedAutomationType: 'none',
+      recommendedTool: 'none',
+      score: 0,
+      priority: 'low',
+      reasons: ['La IA no encontró una prioridad clara con la información disponible.'],
+      currentCoverage: {
+        totalCases: Number(functionality.coverage?.totalCases) || 0,
+        automatedCases: Number(functionality.coverage?.automatedCases) || 0,
+        candidateCases: Number(functionality.coverage?.candidateCases) || 0,
+        manualCases: Number(functionality.coverage?.manualCases) || 0,
+      },
+      relatedTestCases: functionality.testCases.slice(0, 6).map(testCase => ({
+        id: testCase.id,
+        title: testCase.title,
+        automationStatus: testCase.automationStatus || null,
+      })),
+    });
+  }
+
+  const summary = recommendations.reduce(
+    (acc, recommendation) => {
+      switch (recommendation.recommendedCategory) {
+        case 'ui_automation':
+          acc.uiAutomation += 1;
+          break;
+        case 'api_postman':
+          acc.apiPostman += 1;
+          break;
+        case 'performance_k6':
+          acc.performanceK6 += 1;
+          break;
+        case 'already_covered':
+          acc.alreadyCovered += 1;
+          break;
+        case 'not_recommended':
+        default:
+          acc.notRecommended += 1;
+          break;
+      }
+
+      return acc;
+    },
+    {
+      uiAutomation: 0,
+      apiPostman: 0,
+      performanceK6: 0,
+      alreadyCovered: 0,
+      notRecommended: 0,
+    },
+  );
+
+  return {
+    summary,
+    recommendations,
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -793,6 +1097,88 @@ Responde unicamente con JSON valido usando este formato:
         async () =>
           extractJsonPayload<ExecutionRecommendation[]>(
             await requestGroqCompletion(`${prompt}\n\nResponde unicamente con JSON valido.`),
+          ),
+      ),
+    );
+  },
+
+  async analyzeQaStrategyCandidates(
+    userId: number,
+    input: {
+      projectId: string;
+      functionalities: QaStrategyCandidateInput[];
+    },
+  ) {
+    const functionalities = input.functionalities.slice(0, 80);
+
+    const prompt = `Actua como QA Automation Architect senior.
+Analiza la estrategia QA actual y clasifica funcionalidades candidatas segun el mejor enfoque de automatizacion.
+
+Categorias permitidas:
+- ui_automation: candidata a automatizacion UI end-to-end, idealmente con Playwright.
+- api_postman: candidata a pruebas API o integracion automatizadas, idealmente con Postman.
+- performance_k6: candidata a pruebas de performance, carga o tiempo de respuesta, idealmente con k6.
+- already_covered: ya cuenta con cobertura automatizada suficiente para su nivel de riesgo.
+- not_recommended: por ahora no es una prioridad clara para automatizacion.
+
+Reglas:
+- Usa solo las funcionalidades entregadas.
+- Devuelve exactamente una recomendacion por funcionalidad.
+- Prioriza segun riesgo, prioridad, cobertura actual, smoke/regresion, señales funcionales y casos existentes.
+- Recomienda "playwright" solo para ui_automation.
+- Recomienda "postman" solo para api_postman.
+- Recomienda "k6" solo para performance_k6.
+- suggestedAutomationType debe ser ui, api, integration, performance o none.
+- Usa un suggestedAutomationType coherente con la categoria elegida.
+- Usa "none" para already_covered y not_recommended.
+- score debe ser entero de 0 a 100.
+- priority debe ser high, medium o low.
+- reasons debe tener entre 1 y 4 motivos cortos y concretos en espanol.
+- En reasons no menciones herramientas distintas a recommendedTool.
+- No mezcles categorias dentro de reasons.
+- Si recommendedCategory es already_covered, explica solo que la cobertura actual es suficiente.
+- Si recommendedCategory es not_recommended, explica solo por que no es prioridad ahora.
+- relatedTestCases debe incluir solo ids o titulos de casos relacionados entregados en la data.
+- Si una funcionalidad ya tiene buena cobertura automatizada para su riesgo, usa already_covered.
+
+Datos para analizar:
+${JSON.stringify(functionalities, null, 2)}
+
+Responde unicamente con JSON valido usando este formato:
+{
+  "recommendations": [
+    {
+      "functionalityId": "ID",
+      "recommendedCategory": "ui_automation",
+      "suggestedAutomationType": "ui",
+      "recommendedTool": "playwright",
+      "score": 88,
+      "priority": "high",
+      "reasons": ["Motivo 1", "Motivo 2"],
+      "relatedTestCases": [
+        {
+          "id": "tc_1",
+          "title": "Caso relacionado",
+          "automationStatus": "not_automated"
+        }
+      ]
+    }
+  ]
+}`;
+
+    return runAiAction(userId, input.projectId, () =>
+      withAiFallback(
+        async () =>
+          normalizeQaStrategyAnalysisResult(
+            extractJsonPayload(await requestGeminiCompletion(prompt, 'application/json')),
+            functionalities,
+          ),
+        async () =>
+          normalizeQaStrategyAnalysisResult(
+            extractJsonPayload(
+              await requestGroqCompletion(`${prompt}\n\nResponde unicamente con JSON valido.`),
+            ),
+            functionalities,
           ),
       ),
     );

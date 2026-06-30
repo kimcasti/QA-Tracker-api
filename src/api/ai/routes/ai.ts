@@ -38,6 +38,15 @@ export default {
     },
     {
       method: 'POST',
+      path: '/ai/qa-strategy/candidates/analyze',
+      handler: 'ai.analyzeQaStrategyCandidates',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
+    {
+      method: 'POST',
       path: '/ai/project/analyze',
       handler: 'ai.analyzeProject',
       config: {

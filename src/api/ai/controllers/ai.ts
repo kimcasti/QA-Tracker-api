@@ -53,6 +53,35 @@ type DeliveryUnitSummaryInput = {
   };
 };
 
+type QaStrategyCandidateInput = {
+  id: string;
+  name: string;
+  module: string;
+  priority: string;
+  riskLevel: string;
+  status: string;
+  isCore: boolean;
+  isRegression: boolean;
+  isSmoke: boolean;
+  lastFunctionalChangeAt?: string;
+  coverage: {
+    totalCases?: number;
+    automatedCases?: number;
+    candidateCases?: number;
+    manualCases?: number;
+  };
+  testCases: Array<{
+    id: string;
+    title: string;
+    testType: string;
+    priority: string;
+    automationStatus: string;
+    automationType?: string | null;
+    automationTool?: string | null;
+    summary?: string;
+  }>;
+};
+
 type TechnicalReportAnalysisInput = {
   reportType?: string;
   reportTitle?: string;
@@ -161,6 +190,27 @@ export default {
     const result = await strapi
       .service('api::ai.ai')
       .recommendExecutionFunctionalities(userId, payload);
+
+    ctx.body = { data: result };
+  },
+
+  async analyzeQaStrategyCandidates(ctx) {
+    const userId = requireUserId(ctx);
+    const data = getData(ctx);
+    const projectId = requireProjectId(data);
+
+    const functionalities = Array.isArray(data.functionalities)
+      ? (data.functionalities as QaStrategyCandidateInput[])
+      : [];
+
+    if (functionalities.length === 0) {
+      throw new errors.ValidationError('At least one functionality is required.');
+    }
+
+    const result = await strapi.service('api::ai.ai').analyzeQaStrategyCandidates(userId, {
+      projectId,
+      functionalities,
+    });
 
     ctx.body = { data: result };
   },
