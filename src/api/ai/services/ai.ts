@@ -3,6 +3,7 @@ import { normalizeGeminiError } from '../../../utils/ai-provider-errors';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
+const AI_PROVIDER_TIMEOUT_MS = 15_000;
 
 type ProjectInsightInput = {
   name: string;
@@ -537,6 +538,200 @@ function normalizeQaStrategyAnalysisResult(
   };
 }
 
+function buildQaStrategyHeuristicAnalysisResult(
+  functionalities: QaStrategyCandidateInput[],
+): QaStrategyCandidateAnalysisResult {
+  const recommendations = functionalities.map(functionality => {
+    const totalCases = Number(functionality.coverage?.totalCases) || 0;
+    const automatedCases = Number(functionality.coverage?.automatedCases) || 0;
+    const candidateCases = Number(functionality.coverage?.candidateCases) || 0;
+    const manualCases = Math.max(Number(functionality.coverage?.manualCases) || 0, 0);
+    const automatedCoverage = totalCases > 0 ? automatedCases / totalCases : 0;
+    const candidateRatio = totalCases > 0 ? candidateCases / totalCases : 0;
+    const highPriority =
+      String(functionality.priority || '').toLowerCase() === 'alta' ||
+      String(functionality.priority || '').toLowerCase() === 'high';
+    const highRisk =
+      String(functionality.riskLevel || '').toLowerCase() === 'alto' ||
+      String(functionality.riskLevel || '').toLowerCase() === 'high';
+
+    let recommendedCategory: QaStrategyCandidateCategory = 'not_recommended';
+    let suggestedAutomationType: QaStrategyCandidateAutomationType = 'none';
+    let recommendedTool: QaStrategyCandidateTool = 'none';
+    let priority: QaStrategyCandidatePriority = 'low';
+    let score = 20;
+    const reasons: string[] = [];
+
+    if (totalCases > 0 && automatedCoverage >= 0.75) {
+      recommendedCategory = 'already_covered';
+      score = 100;
+      reasons.push('La cobertura automatizada actual ya es suficiente para esta funcionalidad.');
+    } else if (
+      functionality.testCases.some(testCase =>
+        ['performance', 'carga', 'load', 'stress', 'tiempo de respuesta'].some(keyword =>
+          `${testCase.testType} ${testCase.summary || ''} ${testCase.title}`.toLowerCase().includes(keyword),
+        ),
+      )
+    ) {
+      recommendedCategory = 'performance_k6';
+      suggestedAutomationType = 'performance';
+      recommendedTool = 'k6';
+      priority = highRisk || highPriority ? 'high' : 'medium';
+      score = highRisk || highPriority ? 85 : 72;
+      reasons.push('La funcionalidad muestra senales para validar rendimiento y tiempos de respuesta.');
+    } else if (
+      functionality.testCases.some(testCase =>
+        ['api', 'integracion', 'integration', 'endpoint', 'servicio', 'postman'].some(keyword =>
+          `${testCase.testType} ${testCase.summary || ''} ${testCase.title} ${testCase.automationType || ''}`.toLowerCase().includes(keyword),
+        ),
+      )
+    ) {
+      recommendedCategory = 'api_postman';
+      suggestedAutomationType = 'api';
+      recommendedTool = 'postman';
+      priority = highRisk || highPriority ? 'high' : 'medium';
+      score = highRisk || highPriority ? 82 : 70;
+      reasons.push('Los casos relacionados sugieren buen encaje para pruebas API automatizadas.');
+    } else if (
+      manualCases > 0 &&
+      (functionality.isSmoke || functionality.isRegression || functionality.isCore || highPriority || highRisk)
+    ) {
+      recommendedCategory = 'ui_automation';
+      suggestedAutomationType = 'ui';
+      recommendedTool = 'playwright';
+      priority = highRisk || highPriority ? 'high' : 'medium';
+      score = Math.min(
+        95,
+        58 +
+          (functionality.isSmoke ? 12 : 0) +
+          (functionality.isRegression ? 10 : 0) +
+          (functionality.isCore ? 8 : 0) +
+          (highPriority ? 5 : 0) +
+          (highRisk ? 7 : 0) +
+          Math.round(candidateRatio * 10),
+      );
+      reasons.push('La funcionalidad impacta flujos relevantes para validacion de interfaz.');
+    } else if (candidateCases > 0) {
+      recommendedCategory = 'ui_automation';
+      suggestedAutomationType = 'ui';
+      recommendedTool = 'playwright';
+      priority = 'medium';
+      score = 60;
+      reasons.push('Existen casos marcados como candidatos a automatizacion sin cobertura actual.');
+    } else {
+      reasons.push('Con la informacion actual no destaca como la siguiente prioridad de automatizacion.');
+    }
+
+    if (recommendedCategory === 'already_covered') {
+      priority = 'low';
+    } else if (recommendedCategory === 'not_recommended') {
+      priority = highRisk || highPriority ? 'medium' : 'low';
+      score = highRisk || highPriority ? 45 : 20;
+    }
+
+    if (recommendedCategory !== 'already_covered' && automatedCoverage === 0 && totalCases > 0) {
+      reasons.push('Actualmente no cuenta con cobertura automatizada en sus casos asociados.');
+    }
+
+    if (
+      recommendedCategory !== 'already_covered' &&
+      recommendedCategory !== 'not_recommended' &&
+      functionality.isSmoke
+    ) {
+      reasons.push('Hace parte de validaciones Smoke y conviene asegurar su ejecucion frecuente.');
+    }
+
+    if (
+      recommendedCategory !== 'already_covered' &&
+      recommendedCategory !== 'not_recommended' &&
+      functionality.isRegression
+    ) {
+      reasons.push('Tiene valor en regresion y se beneficia de una validacion repetible.');
+    }
+
+    return {
+      functionalityId: functionality.id,
+      functionalityName: functionality.name,
+      module: functionality.module,
+      recommendedCategory,
+      suggestedAutomationType,
+      recommendedTool,
+      score,
+      priority,
+      reasons: reasons.slice(0, 4),
+      currentCoverage: {
+        totalCases,
+        automatedCases,
+        candidateCases,
+        manualCases,
+      },
+      relatedTestCases: functionality.testCases.slice(0, 6).map(testCase => ({
+        id: testCase.id,
+        title: testCase.title,
+        automationStatus: testCase.automationStatus || null,
+      })),
+    } satisfies QaStrategyCandidateRecommendation;
+  });
+
+  const summary = recommendations.reduce(
+    (acc, recommendation) => {
+      switch (recommendation.recommendedCategory) {
+        case 'ui_automation':
+          acc.uiAutomation += 1;
+          break;
+        case 'api_postman':
+          acc.apiPostman += 1;
+          break;
+        case 'performance_k6':
+          acc.performanceK6 += 1;
+          break;
+        case 'already_covered':
+          acc.alreadyCovered += 1;
+          break;
+        case 'not_recommended':
+        default:
+          acc.notRecommended += 1;
+          break;
+      }
+
+      return acc;
+    },
+    {
+      uiAutomation: 0,
+      apiPostman: 0,
+      performanceK6: 0,
+      alreadyCovered: 0,
+      notRecommended: 0,
+    },
+  );
+
+  return {
+    summary,
+    recommendations,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs = AI_PROVIDER_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('AI_PROVIDER_TIMEOUT');
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function buildTechnicalReportPrompt(input: TechnicalReportAnalysisInput) {
   const sharedContext = `Contexto del reporte:
 - Tipo: ${input.reportType}
@@ -778,7 +973,7 @@ async function requestGeminiCompletion(prompt: string, responseMimeType?: 'appli
     throw new Error('GEMINI_API_KEY_MISSING');
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
@@ -808,7 +1003,7 @@ async function requestGroqCompletion(prompt: string) {
     throw new Error('GROQ_API_KEY_MISSING');
   }
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -901,6 +1096,7 @@ function rethrowAiError(error: unknown): never {
 
   if (
     message === 'AI_PROVIDER_MISSING' ||
+    message === 'AI_PROVIDER_TIMEOUT' ||
     message === 'GEMINI_API_KEY_INVALID' ||
     message === 'GEMINI_API_KEY_LEAKED'
   ) {
@@ -1166,22 +1362,32 @@ Responde unicamente con JSON valido usando este formato:
   ]
 }`;
 
-    return runAiAction(userId, input.projectId, () =>
-      withAiFallback(
-        async () =>
-          normalizeQaStrategyAnalysisResult(
-            extractJsonPayload(await requestGeminiCompletion(prompt, 'application/json')),
-            functionalities,
-          ),
-        async () =>
-          normalizeQaStrategyAnalysisResult(
-            extractJsonPayload(
-              await requestGroqCompletion(`${prompt}\n\nResponde unicamente con JSON valido.`),
+    return runAiAction(userId, input.projectId, async () => {
+      try {
+        return await withAiFallback(
+          async () =>
+            normalizeQaStrategyAnalysisResult(
+              extractJsonPayload(await requestGeminiCompletion(prompt, 'application/json')),
+              functionalities,
             ),
-            functionalities,
-          ),
-      ),
-    );
+          async () =>
+            normalizeQaStrategyAnalysisResult(
+              extractJsonPayload(
+                await requestGroqCompletion(`${prompt}\n\nResponde unicamente con JSON valido.`),
+              ),
+              functionalities,
+            ),
+        );
+      } catch (error) {
+        strapi.log.warn(
+          `QA strategy candidate analysis fell back to heuristic mode: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+
+        return buildQaStrategyHeuristicAnalysisResult(functionalities);
+      }
+    });
   },
 
   async analyzeProject(
