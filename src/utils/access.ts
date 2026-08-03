@@ -117,6 +117,7 @@ export const EXPOSED_ACTIONS = [
   'api::test-plan.test-plan.delete',
   'api::test-run-result.test-run-result.find',
   'api::test-run-result.test-run-result.findOne',
+  'api::test-run-result.test-run-result.batchSync',
   'api::test-run-result.test-run-result.create',
   'api::test-run-result.test-run-result.update',
   'api::test-run-result.test-run-result.delete',

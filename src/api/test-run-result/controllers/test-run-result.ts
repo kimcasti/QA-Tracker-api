@@ -28,6 +28,44 @@ type TestRunResultPayload = {
   bug?: unknown;
 };
 
+type BatchTestRunResultSyncItem = {
+  documentId?: string | null;
+  data?: TestRunResultPayload | null;
+};
+
+type BatchTestRunResultSyncPayload = {
+  testRun?: unknown;
+  project?: unknown;
+  organization?: unknown;
+  items?: BatchTestRunResultSyncItem[] | null;
+};
+
+const testRunResultPopulate = {
+  organization: true,
+  project: true,
+  testRun: true,
+  functionality: true,
+  testCase: true,
+  bug: true,
+};
+
+const syncedTestRunPopulate = {
+  project: true,
+  sprint: true,
+  publicUatSession: {
+    populate: {
+      externalParticipant: true,
+    },
+  },
+  results: {
+    populate: {
+      functionality: true,
+      testCase: true,
+      bug: true,
+    },
+  },
+};
+
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -233,6 +271,36 @@ function buildTestRunResultData(
   return data;
 }
 
+function buildResultIdentity(source: {
+  functionalityDocumentId?: string | null;
+  functionalityCode?: string | null;
+  testCaseDocumentId?: string | null;
+}) {
+  const functionalityKey =
+    extractRelationDocumentId(source.functionalityDocumentId) ||
+    extractRelationDocumentId(source.functionalityCode) ||
+    '__functionality__';
+  const testCaseKey = extractRelationDocumentId(source.testCaseDocumentId) || '__test_case__';
+
+  return `${functionalityKey}::${testCaseKey}`;
+}
+
+async function getRunResults(testRunDocumentId: string) {
+  return (await strapi.documents('api::test-run-result.test-run-result').findMany({
+    filters: {
+      testRun: { documentId: testRunDocumentId },
+    },
+    populate: testRunResultPopulate,
+  })) as any[];
+}
+
+async function getSyncedTestRun(testRunDocumentId: string) {
+  return strapi.documents('api::test-run.test-run').findOne({
+    documentId: testRunDocumentId,
+    populate: syncedTestRunPopulate as any,
+  });
+}
+
 export default factories.createCoreController('api::test-run-result.test-run-result', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -276,14 +344,7 @@ export default factories.createCoreController('api::test-run-result.test-run-res
         organization: organizationDocumentId,
         testRun: testRunDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        testRun: true,
-        functionality: true,
-        testCase: true,
-        bug: true,
-      },
+      populate: testRunResultPopulate,
     });
 
     ctx.body = { data: created };
@@ -303,14 +364,7 @@ export default factories.createCoreController('api::test-run-result.test-run-res
 
     const existing = await strapi.documents('api::test-run-result.test-run-result').findOne({
       documentId,
-      populate: {
-        organization: true,
-        project: true,
-        testRun: true,
-        functionality: true,
-        testCase: true,
-        bug: true,
-      },
+      populate: testRunResultPopulate,
     });
 
     if (!existing) {
@@ -366,16 +420,142 @@ export default factories.createCoreController('api::test-run-result.test-run-res
         organization: organizationDocumentId,
         testRun: testRunDocumentId,
       } as any,
-      populate: {
-        organization: true,
-        project: true,
-        testRun: true,
-        functionality: true,
-        testCase: true,
-        bug: true,
-      },
+      populate: testRunResultPopulate,
     });
 
     ctx.body = { data: updated };
+  },
+
+  async batchSync(ctx) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const payload = (ctx.request.body?.data || {}) as BatchTestRunResultSyncPayload;
+    const testRunDocumentId = extractRelationDocumentId(payload.testRun);
+    const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
+    const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
+    const items = Array.isArray(payload.items) ? payload.items : [];
+
+    if (!testRunDocumentId) {
+      throw new errors.ValidationError('Test run result testRun is required.');
+    }
+
+    const testRun = await strapi.documents('api::test-run.test-run').findOne({
+      documentId: testRunDocumentId,
+      populate: {
+        organization: true,
+        project: true,
+      },
+    });
+
+    if (!testRun) {
+      throw new errors.NotFoundError('Test run not found.');
+    }
+
+    const projectDocumentId = requestedProjectDocumentId ?? testRun.project?.documentId ?? null;
+    if (!projectDocumentId) {
+      throw new errors.ValidationError('Test run result project is required.');
+    }
+
+    const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+      project: projectDocumentId,
+      organization: requestedOrganizationDocumentId ?? testRun.organization?.documentId ?? null,
+    });
+
+    const existingResults = await getRunResults(testRunDocumentId);
+    const existingResultsByDocumentId = new Map(
+      existingResults.map(item => [item.documentId, item]),
+    );
+    const existingResultsByIdentity = new Map(
+      existingResults.map(item => [
+        buildResultIdentity({
+          functionalityDocumentId: item.functionality?.documentId,
+          functionalityCode: item.functionality?.code,
+          testCaseDocumentId: item.testCase?.documentId,
+        }),
+        item,
+      ]),
+    );
+
+    const savedResultIds = new Set<string>();
+
+    for (const item of items) {
+      const resultPayload = (item?.data || {}) as TestRunResultPayload;
+      const functionalityDocumentId = await resolveFunctionalityDocumentId(
+        resultPayload.functionality,
+        projectDocumentId,
+      );
+      const testCaseDocumentId = await resolveTestCaseDocumentId(
+        resultPayload.testCase,
+        projectDocumentId,
+      );
+      const bugDocumentId = await resolveBugDocumentId(resultPayload.bug, projectDocumentId);
+      const resultIdentity = buildResultIdentity({
+        functionalityDocumentId,
+        testCaseDocumentId,
+      });
+
+      const existingResult =
+        (item?.documentId ? existingResultsByDocumentId.get(item.documentId) : undefined) ||
+        existingResultsByIdentity.get(resultIdentity);
+
+      if (existingResult) {
+        const updated = await strapi.documents('api::test-run-result.test-run-result').update({
+          documentId: existingResult.documentId,
+          data: {
+            ...buildTestRunResultData(
+              resultPayload,
+              projectDocumentId,
+              functionalityDocumentId ?? existingResult.functionality?.documentId ?? null,
+              testCaseDocumentId ?? existingResult.testCase?.documentId ?? null,
+              bugDocumentId ?? existingResult.bug?.documentId ?? null,
+            ),
+            organization: organizationDocumentId,
+            testRun: testRunDocumentId,
+          } as any,
+          populate: testRunResultPopulate,
+        });
+
+        savedResultIds.add(updated.documentId);
+        existingResultsByDocumentId.set(updated.documentId, updated);
+        existingResultsByIdentity.set(resultIdentity, updated);
+        continue;
+      }
+
+      const created = await strapi.documents('api::test-run-result.test-run-result').create({
+        data: {
+          ...buildTestRunResultData(
+            resultPayload,
+            projectDocumentId,
+            functionalityDocumentId,
+            testCaseDocumentId,
+            bugDocumentId,
+          ),
+          organization: organizationDocumentId,
+          testRun: testRunDocumentId,
+        } as any,
+        populate: testRunResultPopulate,
+      });
+
+      savedResultIds.add(created.documentId);
+      existingResultsByDocumentId.set(created.documentId, created);
+      existingResultsByIdentity.set(resultIdentity, created);
+    }
+
+    await Promise.all(
+      existingResults
+        .filter(item => !savedResultIds.has(item.documentId))
+        .map(item =>
+          strapi.documents('api::test-run-result.test-run-result').delete({
+            documentId: item.documentId,
+          }),
+        ),
+    );
+
+    const syncedTestRun = await getSyncedTestRun(testRunDocumentId);
+    ctx.body = { data: syncedTestRun };
   },
 }));
