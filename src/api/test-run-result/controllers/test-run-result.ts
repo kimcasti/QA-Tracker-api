@@ -33,10 +33,20 @@ type BatchTestRunResultSyncItem = {
   data?: TestRunResultPayload | null;
 };
 
+type NormalizedBatchTestRunResultSyncItem = {
+  documentId?: string | null;
+  resultPayload: TestRunResultPayload;
+  functionalityDocumentId: string | null;
+  testCaseDocumentId: string | null;
+  bugDocumentId: string | null;
+  resultIdentity: string;
+};
+
 type BatchTestRunResultSyncPayload = {
   testRun?: unknown;
   project?: unknown;
   organization?: unknown;
+  removeMissingResults?: boolean | null;
   items?: BatchTestRunResultSyncItem[] | null;
 };
 
@@ -149,6 +159,66 @@ async function resolveFunctionalityDocumentId(
   }
 
   return fallbackDocumentId ?? null;
+}
+
+type ProjectCatalogRecord = {
+  documentId?: string | null;
+};
+
+type FunctionalityCatalogRecord = ProjectCatalogRecord & {
+  code?: string | null;
+};
+
+type TestCaseCatalogRecord = ProjectCatalogRecord & {
+  title?: string | null;
+};
+
+type BugCatalogRecord = ProjectCatalogRecord & {
+  internalBugId?: string | null;
+  externalBugId?: string | null;
+};
+
+function normalizeCatalogKey(value?: string | null) {
+  return String(value || '').trim();
+}
+
+function buildDocumentIdResolver<T extends ProjectCatalogRecord>(
+  records: T[],
+  keySelectors: Array<(record: T) => string | null | undefined>,
+) {
+  const recordsByDocumentId = new Map<string, string>();
+  const recordsByAltKey = new Map<string, string>();
+
+  records.forEach(record => {
+    const documentId = normalizeCatalogKey(record.documentId);
+    if (!documentId) {
+      return;
+    }
+
+    recordsByDocumentId.set(documentId, documentId);
+
+    keySelectors.forEach(selectKey => {
+      const key = normalizeCatalogKey(selectKey(record));
+      if (key) {
+        recordsByAltKey.set(key, documentId);
+      }
+    });
+  });
+
+  return (rawValue: unknown, fallbackDocumentId?: string | null) => {
+    const requestedDocumentId = normalizeCatalogKey(extractRelationDocumentId(rawValue));
+
+    if (requestedDocumentId) {
+      return (
+        recordsByDocumentId.get(requestedDocumentId) ||
+        recordsByAltKey.get(requestedDocumentId) ||
+        fallbackDocumentId ||
+        null
+      );
+    }
+
+    return fallbackDocumentId ?? null;
+  };
 }
 
 async function resolveTestCaseDocumentId(
@@ -301,6 +371,33 @@ async function getSyncedTestRun(testRunDocumentId: string) {
   });
 }
 
+async function getProjectFunctionalityCatalog(projectDocumentId: string) {
+  return (await strapi.documents('api::functionality.functionality').findMany({
+    filters: {
+      project: { documentId: projectDocumentId },
+    },
+    fields: ['documentId', 'code'],
+  })) as FunctionalityCatalogRecord[];
+}
+
+async function getProjectTestCaseCatalog(projectDocumentId: string) {
+  return (await strapi.documents('api::test-case.test-case').findMany({
+    filters: {
+      project: { documentId: projectDocumentId },
+    },
+    fields: ['documentId', 'title'],
+  })) as TestCaseCatalogRecord[];
+}
+
+async function getProjectBugCatalog(projectDocumentId: string) {
+  return (await strapi.documents('api::bug.bug').findMany({
+    filters: {
+      project: { documentId: projectDocumentId },
+    },
+    fields: ['documentId', 'internalBugId', 'externalBugId'],
+  })) as BugCatalogRecord[];
+}
+
 export default factories.createCoreController('api::test-run-result.test-run-result', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -437,6 +534,7 @@ export default factories.createCoreController('api::test-run-result.test-run-res
     const testRunDocumentId = extractRelationDocumentId(payload.testRun);
     const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
     const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
+    const shouldRemoveMissingResults = payload.removeMissingResults !== false;
     const items = Array.isArray(payload.items) ? payload.items : [];
 
     if (!testRunDocumentId) {
@@ -465,7 +563,26 @@ export default factories.createCoreController('api::test-run-result.test-run-res
       organization: requestedOrganizationDocumentId ?? testRun.organization?.documentId ?? null,
     });
 
-    const existingResults = await getRunResults(testRunDocumentId);
+    const [existingResults, projectFunctionalities, projectTestCases, projectBugs] =
+      await Promise.all([
+        getRunResults(testRunDocumentId),
+        getProjectFunctionalityCatalog(projectDocumentId),
+        getProjectTestCaseCatalog(projectDocumentId),
+        getProjectBugCatalog(projectDocumentId),
+      ]);
+
+    const resolveFunctionalityFromCatalog = buildDocumentIdResolver(
+      projectFunctionalities,
+      [record => record.code],
+    );
+    const resolveTestCaseFromCatalog = buildDocumentIdResolver(projectTestCases, [
+      record => record.title,
+    ]);
+    const resolveBugFromCatalog = buildDocumentIdResolver(projectBugs, [
+      record => record.internalBugId,
+      record => record.externalBugId,
+    ]);
+
     const existingResultsByDocumentId = new Map(
       existingResults.map(item => [item.documentId, item]),
     );
@@ -480,26 +597,41 @@ export default factories.createCoreController('api::test-run-result.test-run-res
       ]),
     );
 
-    const savedResultIds = new Set<string>();
-
-    for (const item of items) {
+    const normalizedItemsByIdentity = new Map<string, NormalizedBatchTestRunResultSyncItem>();
+    items.forEach(item => {
       const resultPayload = (item?.data || {}) as TestRunResultPayload;
-      const functionalityDocumentId = await resolveFunctionalityDocumentId(
-        resultPayload.functionality,
-        projectDocumentId,
-      );
-      const testCaseDocumentId = await resolveTestCaseDocumentId(
-        resultPayload.testCase,
-        projectDocumentId,
-      );
-      const bugDocumentId = await resolveBugDocumentId(resultPayload.bug, projectDocumentId);
+      const functionalityDocumentId = resolveFunctionalityFromCatalog(resultPayload.functionality);
+      const testCaseDocumentId = resolveTestCaseFromCatalog(resultPayload.testCase);
+      const bugDocumentId = resolveBugFromCatalog(resultPayload.bug);
       const resultIdentity = buildResultIdentity({
         functionalityDocumentId,
         testCaseDocumentId,
       });
 
+      normalizedItemsByIdentity.set(resultIdentity, {
+        documentId: item?.documentId || null,
+        resultPayload,
+        functionalityDocumentId,
+        testCaseDocumentId,
+        bugDocumentId,
+        resultIdentity,
+      });
+    });
+
+    const savedResultIds = new Set<string>();
+
+    for (const item of normalizedItemsByIdentity.values()) {
+      const {
+        documentId,
+        resultPayload,
+        functionalityDocumentId,
+        testCaseDocumentId,
+        bugDocumentId,
+        resultIdentity,
+      } = item;
+
       const existingResult =
-        (item?.documentId ? existingResultsByDocumentId.get(item.documentId) : undefined) ||
+        (documentId ? existingResultsByDocumentId.get(documentId) : undefined) ||
         existingResultsByIdentity.get(resultIdentity);
 
       if (existingResult) {
@@ -545,15 +677,17 @@ export default factories.createCoreController('api::test-run-result.test-run-res
       existingResultsByIdentity.set(resultIdentity, created);
     }
 
-    await Promise.all(
-      existingResults
-        .filter(item => !savedResultIds.has(item.documentId))
-        .map(item =>
-          strapi.documents('api::test-run-result.test-run-result').delete({
-            documentId: item.documentId,
-          }),
-        ),
-    );
+    if (shouldRemoveMissingResults) {
+      await Promise.all(
+        existingResults
+          .filter(item => !savedResultIds.has(item.documentId))
+          .map(item =>
+            strapi.documents('api::test-run-result.test-run-result').delete({
+              documentId: item.documentId,
+            }),
+          ),
+      );
+    }
 
     const syncedTestRun = await getSyncedTestRun(testRunDocumentId);
     ctx.body = { data: syncedTestRun };

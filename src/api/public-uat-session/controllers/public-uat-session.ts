@@ -358,6 +358,12 @@ function mapPublicSessionResponse(session: any) {
   };
 }
 
+function hasPendingPublicResults(session: any) {
+  return Array.isArray(session?.testRun?.results)
+    ? session.testRun.results.some((result: any) => result.result === 'not_executed')
+    : true;
+}
+
 export default factories.createCoreController(
   'api::public-uat-session.public-uat-session' as any,
   () => ({
@@ -637,6 +643,12 @@ export default factories.createCoreController(
       const session = await validatePublicSessionToken(token);
       if (session.status !== 'active') {
         throw new errors.ForbiddenError('This public UAT session is already closed.');
+      }
+
+      if (hasPendingPublicResults(session)) {
+        throw new errors.ValidationError(
+          'All UAT test cases must have a saved result before completing the public session.',
+        );
       }
 
       const nowIso = new Date().toISOString();

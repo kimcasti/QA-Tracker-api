@@ -144,13 +144,85 @@ const summaryPopulate = {
   sprint: {
     fields: ['name'],
   },
-  results: {
-    fields: ['result'],
-  },
   publicUatSession: {
     fields: ['status', 'expiresAt', 'activatedAt', 'completedAt', 'revokedAt'],
   },
 };
+
+async function attachResultSummary(items: any[]) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return items;
+  }
+
+  const runDocumentIds = items
+    .map(item => String(item?.documentId || '').trim())
+    .filter(Boolean);
+
+  if (runDocumentIds.length === 0) {
+    return items;
+  }
+
+  const results = (await strapi.documents('api::test-run-result.test-run-result').findMany({
+    filters: {
+      testRun: {
+        documentId: {
+          $in: runDocumentIds,
+        },
+      },
+    },
+    fields: ['result'],
+    populate: {
+      testRun: {
+        fields: ['documentId'],
+      },
+    },
+  })) as Array<{
+    result?: string | null;
+    testRun?: { documentId?: string | null };
+  }>;
+
+  const statsByRunId = results.reduce<
+    Map<
+      string,
+      {
+        totalResults: number;
+        executedResults: number;
+      }
+    >
+  >((acc, result) => {
+    const runDocumentId = String(result.testRun?.documentId || '').trim();
+    if (!runDocumentId) {
+      return acc;
+    }
+
+    const current = acc.get(runDocumentId) || {
+      totalResults: 0,
+      executedResults: 0,
+    };
+
+    current.totalResults += 1;
+    if ((result.result || 'not_executed') !== 'not_executed') {
+      current.executedResults += 1;
+    }
+
+    acc.set(runDocumentId, current);
+    return acc;
+  }, new Map());
+
+  return items.map(item => {
+    const runDocumentId = String(item?.documentId || '').trim();
+    const stats = statsByRunId.get(runDocumentId) || {
+      totalResults: 0,
+      executedResults: 0,
+    };
+
+    return {
+      ...item,
+      totalResults: stats.totalResults,
+      executedResults: stats.executedResults,
+    };
+  });
+}
 
 async function resolveOrganizationDocumentId(userId: number, payload: TestRunPayload) {
   const memberships = await getUserMemberships(strapi, userId);
@@ -187,7 +259,8 @@ export default factories.createCoreController('api::test-run.test-run', () => ({
     };
 
     const { results, pagination } = await strapi.service('api::test-run.test-run').find(query);
-    const sanitizedResults = await this.sanitizeOutput(results, ctx);
+    const summarizedResults = await attachResultSummary(results as any[]);
+    const sanitizedResults = await this.sanitizeOutput(summarizedResults, ctx);
     return this.transformResponse(sanitizedResults, { pagination });
   },
 
