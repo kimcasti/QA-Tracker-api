@@ -5,6 +5,7 @@ import {
   createDeactivateMemberHandler,
   createInviteHandler,
   createReactivateMemberHandler,
+  createUpdateMemberProjectsHandler,
   createUpdateMemberRoleHandler,
 } from './organization-team';
 
@@ -71,7 +72,7 @@ test('organization-team invite requires a workspace project for manager and view
       assert.ok(error instanceof errors.ValidationError);
       assert.equal(
         (error as Error).message,
-        'Manager and Viewer invitations require a project assignment.',
+        'Manager and Viewer invitations require at least one project assignment.',
       );
       return true;
     },
@@ -134,6 +135,7 @@ test('organization-team invite deletes the invitation when email delivery fails'
       getOrganizationDbId: async () => 99,
       resolveWorkspaceBranding: async () => ({
         workspaceProjectDocumentId: undefined,
+        workspaceProjectDocumentIds: [],
         workspaceName: undefined,
         workspaceLogoUrl: undefined,
       }),
@@ -226,6 +228,7 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
       getOrganizationDbId: async () => 88,
       resolveWorkspaceBranding: async () => ({
         workspaceProjectDocumentId: 'proj-1',
+        workspaceProjectDocumentIds: ['proj-1'],
         workspaceName: 'Portal',
         workspaceLogoUrl: 'https://cdn/logo.png',
       }),
@@ -246,7 +249,7 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
   const ctx = createCtx({
     email: 'viewer@example.com',
     roleDocumentId: 'role-viewer',
-    workspaceProjectDocumentId: 'proj-1',
+    workspaceProjectDocumentIds: ['proj-1'],
   });
 
   await invite(ctx as any);
@@ -304,6 +307,146 @@ test('organization-team updateMemberRole blocks manager/viewer role changes that
     (error: unknown) => {
       assert.ok(error instanceof errors.ValidationError);
       assert.match((error as Error).message, /require project assignment support/i);
+      return true;
+    },
+  );
+});
+
+test('organization-team updateMemberProjects updates accepted invitation assignments for manager/viewer members', async () => {
+  const updatedInvitations: Array<{ documentId: string; data: Record<string, unknown> }> = [];
+
+  const updateMemberProjects = createUpdateMemberProjectsHandler({
+    strapi: {
+      documents(uid: string) {
+        if (uid === 'api::organization-membership.organization-membership') {
+          return {
+            findOne: async () => ({
+              documentId: 'mem-7',
+              organization: { documentId: 'org-1' },
+              user: { id: 44, email: 'manager@example.com' },
+              organizationRole: { code: 'manager' },
+            }),
+          };
+        }
+
+        if (uid === 'api::organization-invitation.organization-invitation') {
+          return {
+            findMany: async () => [{ documentId: 'inv-accepted-1' }, { documentId: 'inv-accepted-2' }],
+            update: async ({ documentId, data }: { documentId: string; data: Record<string, unknown> }) => {
+              updatedInvitations.push({ documentId, data });
+            },
+          };
+        }
+
+        throw new Error(`Unexpected documents uid: ${uid}`);
+      },
+    } as any,
+    dependencies: {
+      ensureOwnerAccess: async () => ({
+        organizationDocumentId: 'org-1',
+        organizationName: 'Workspace',
+        membershipDocumentId: 'mem-owner',
+        currentRoleCode: 'owner',
+        canManage: true,
+      }),
+      resolveWorkspaceBranding: async () => ({
+        workspaceProjectDocumentId: 'proj-1',
+        workspaceProjectDocumentIds: ['proj-1', 'proj-2'],
+        workspaceName: '2 proyectos asignados',
+        workspaceLogoUrl: undefined,
+      }),
+      buildTeamPayload: async () => ({
+        organization: { documentId: 'org-1' },
+        members: [{ documentId: 'mem-7' }],
+      }),
+    },
+  });
+
+  const ctx = {
+    state: { user: { id: 21 } },
+    params: { documentId: 'mem-7' },
+    request: {
+      body: {
+        data: {
+          workspaceProjectDocumentIds: ['proj-1', 'proj-2'],
+        },
+      },
+    },
+    body: undefined as unknown,
+  };
+
+  await updateMemberProjects(ctx as any);
+
+  assert.deepEqual(updatedInvitations, [
+    {
+      documentId: 'inv-accepted-1',
+      data: {
+        workspaceProjectDocumentId: 'proj-1',
+        workspaceProjectDocumentIds: ['proj-1', 'proj-2'],
+        workspaceName: '2 proyectos asignados',
+      },
+    },
+    {
+      documentId: 'inv-accepted-2',
+      data: {
+        workspaceProjectDocumentId: 'proj-1',
+        workspaceProjectDocumentIds: ['proj-1', 'proj-2'],
+        workspaceName: '2 proyectos asignados',
+      },
+    },
+  ]);
+  assert.deepEqual(ctx.body, {
+    organization: { documentId: 'org-1' },
+    members: [{ documentId: 'mem-7' }],
+  });
+});
+
+test('organization-team updateMemberProjects rejects members without project-scoped roles', async () => {
+  const updateMemberProjects = createUpdateMemberProjectsHandler({
+    strapi: {
+      documents(uid: string) {
+        if (uid === 'api::organization-membership.organization-membership') {
+          return {
+            findOne: async () => ({
+              documentId: 'mem-8',
+              organization: { documentId: 'org-1' },
+              user: { id: 50, email: 'qa@example.com' },
+              organizationRole: { code: 'qa-engineer' },
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected documents uid: ${uid}`);
+      },
+    } as any,
+    dependencies: {
+      ensureOwnerAccess: async () => ({
+        organizationDocumentId: 'org-1',
+        organizationName: 'Workspace',
+        membershipDocumentId: 'mem-owner',
+        currentRoleCode: 'owner',
+        canManage: true,
+      }),
+      resolveWorkspaceBranding: async () => ({
+        workspaceProjectDocumentId: 'proj-1',
+        workspaceProjectDocumentIds: ['proj-1'],
+        workspaceName: 'Portal',
+        workspaceLogoUrl: undefined,
+      }),
+      buildTeamPayload: async () => ({ ok: true }),
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      updateMemberProjects({
+        state: { user: { id: 21 } },
+        params: { documentId: 'mem-8' },
+        request: { body: { data: { workspaceProjectDocumentIds: ['proj-1'] } } },
+      } as any),
+    (error: unknown) => {
+      assert.ok(error instanceof errors.ValidationError);
+      assert.match((error as Error).message, /only manager and viewer/i);
       return true;
     },
   );

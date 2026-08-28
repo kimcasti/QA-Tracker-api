@@ -169,6 +169,7 @@ export const EXPOSED_ACTIONS = [
   'api::organization-team.organization-team.current',
   'api::organization-team.organization-team.invite',
   'api::organization-team.organization-team.updateMemberRole',
+  'api::organization-team.organization-team.updateMemberProjects',
   'api::organization-team.organization-team.deactivateMember',
   'api::organization-team.organization-team.reactivateMember',
   'api::organization-team.organization-team.resendInvitation',

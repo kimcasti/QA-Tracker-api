@@ -939,6 +939,7 @@ export interface ApiOrganizationInvitationOrganizationInvitation
       Schema.Attribute.Private;
     workspaceName: Schema.Attribute.String;
     workspaceProjectDocumentId: Schema.Attribute.String;
+    workspaceProjectDocumentIds: Schema.Attribute.JSON;
   };
 }
 

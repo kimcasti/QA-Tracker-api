@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-08-27T21:44:26.370Z"
+    "x-generation-date": "2026-08-28T00:52:16.156Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -13898,6 +13898,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -19748,6 +19749,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -25879,6 +25881,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -31771,6 +31774,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -37669,6 +37673,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -43505,6 +43510,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -49466,6 +49472,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -55356,6 +55363,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -61124,6 +61132,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -67305,6 +67314,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -73344,6 +73354,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -79156,6 +79167,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -85037,6 +85049,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -90808,6 +90821,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -96799,6 +96813,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -102641,6 +102656,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -108599,6 +108615,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -114522,6 +114539,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -120503,6 +120521,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -126454,6 +126473,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -132407,6 +132427,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -138403,6 +138424,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },
@@ -144335,6 +144357,7 @@
                     "workspaceProjectDocumentId": {
                       "type": "string"
                     },
+                    "workspaceProjectDocumentIds": {},
                     "workspaceName": {
                       "type": "string"
                     },

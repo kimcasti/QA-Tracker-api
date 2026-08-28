@@ -422,6 +422,13 @@ export default () => ({
         invitedAt: invitation.invitedAt,
         status: invitation.status,
         workspaceProjectDocumentId: invitation.workspaceProjectDocumentId || null,
+        workspaceProjectDocumentIds: Array.isArray(invitation.workspaceProjectDocumentIds)
+          ? invitation.workspaceProjectDocumentIds
+              .map((value: unknown) => String(value || '').trim())
+              .filter(Boolean)
+          : invitation.workspaceProjectDocumentId
+            ? [String(invitation.workspaceProjectDocumentId).trim()].filter(Boolean)
+            : [],
         workspaceName: invitation.workspaceName || null,
         role: invitation.organizationRole
           ? {

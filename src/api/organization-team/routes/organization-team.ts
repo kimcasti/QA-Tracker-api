@@ -34,6 +34,14 @@ export default {
     },
     {
       method: 'PUT',
+      path: '/organization-team/members/:documentId/projects',
+      handler: 'organization-team.updateMemberProjects',
+      config: {
+        auth: {},
+      },
+    },
+    {
+      method: 'PUT',
       path: '/organization-team/members/:documentId/deactivate',
       handler: 'organization-team.deactivateMember',
       config: {

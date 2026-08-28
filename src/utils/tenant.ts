@@ -206,22 +206,34 @@ async function getAcceptedProjectAssignments(
     filters: {
       email,
       status: 'accepted',
-      workspaceProjectDocumentId: {
-        $notNull: true,
-      },
       organization: {
         documentId: {
           $in: organizationDocumentIds,
         },
       },
     },
-    fields: ['workspaceProjectDocumentId'],
+    fields: ['workspaceProjectDocumentId', 'workspaceProjectDocumentIds'],
     sort: ['invitedAt:desc'],
   });
 
-  return invitations
-    .map((invitation) => String(invitation.workspaceProjectDocumentId || '').trim())
-    .filter(Boolean);
+  const projectIds = invitations.flatMap(invitation => {
+    const multiProjectIds = Array.isArray(invitation.workspaceProjectDocumentIds)
+      ? invitation.workspaceProjectDocumentIds
+      : [];
+
+    const normalizedMulti = multiProjectIds
+      .map(projectId => String(projectId || '').trim())
+      .filter(Boolean);
+
+    if (normalizedMulti.length > 0) {
+      return normalizedMulti;
+    }
+
+    const legacyProjectId = String(invitation.workspaceProjectDocumentId || '').trim();
+    return legacyProjectId ? [legacyProjectId] : [];
+  });
+
+  return Array.from(new Set(projectIds));
 }
 
 export async function getUserProjectAccessScope(

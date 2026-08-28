@@ -27,6 +27,9 @@
     "workspaceProjectDocumentId": {
       "type": "string"
     },
+    "workspaceProjectDocumentIds": {
+      "type": "json"
+    },
     "workspaceName": {
       "type": "string"
     },

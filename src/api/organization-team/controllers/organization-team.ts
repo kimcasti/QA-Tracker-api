@@ -50,6 +50,12 @@ type UpdateMemberRoleDependencies = {
   buildTeamPayload: typeof buildTeamPayload;
 };
 
+type UpdateMemberProjectsDependencies = {
+  ensureOwnerAccess: typeof ensureOwnerAccess;
+  resolveWorkspaceBranding: typeof resolveWorkspaceBranding;
+  buildTeamPayload: typeof buildTeamPayload;
+};
+
 type DeactivateMemberDependencies = {
   ensureOwnerAccess: typeof ensureOwnerAccess;
   syncUserAccessState: typeof syncUserAccessState;
@@ -64,6 +70,13 @@ type ReactivateMemberDependencies = {
   toNumericUserId: typeof toNumericUserId;
 };
 
+type WorkspaceBranding = {
+  workspaceProjectDocumentId?: string;
+  workspaceProjectDocumentIds?: string[];
+  workspaceName?: string;
+  workspaceLogoUrl?: string;
+};
+
 function normalizeEmail(value: unknown) {
   return String(value || '').trim().toLowerCase();
 }
@@ -75,6 +88,39 @@ function roleOrderIndex(code?: string) {
 
 function requiresProjectAssignment(roleCode?: string) {
   return roleCode === 'manager' || roleCode === 'viewer';
+}
+
+function normalizeWorkspaceProjectDocumentIds(rawValue: unknown) {
+  const values = Array.isArray(rawValue)
+    ? rawValue
+    : typeof rawValue === 'string'
+      ? [rawValue]
+      : [];
+
+  return Array.from(
+    new Set(
+      values
+        .map(value => String(value || '').trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getInvitationProjectDocumentIds(invitation: {
+  workspaceProjectDocumentIds?: unknown;
+  workspaceProjectDocumentId?: unknown;
+  [key: string]: unknown;
+}) {
+  const projectDocumentIds = normalizeWorkspaceProjectDocumentIds(
+    invitation.workspaceProjectDocumentIds,
+  );
+
+  if (projectDocumentIds.length > 0) {
+    return projectDocumentIds;
+  }
+
+  const legacyProjectDocumentId = String(invitation.workspaceProjectDocumentId || '').trim();
+  return legacyProjectDocumentId ? [legacyProjectDocumentId] : [];
 }
 
 async function getOrganizationDbId(documentId: string) {
@@ -154,24 +200,103 @@ async function getMembers(organizationDocumentId: string, currentUserId: number)
     },
   });
 
+  const memberEmails = Array.from(
+    new Set(
+      memberships
+        .map(membership => normalizeEmail(membership.user?.email))
+        .filter(Boolean),
+    ),
+  );
+
+  const acceptedInvitations = memberEmails.length
+    ? await strapi.documents('api::organization-invitation.organization-invitation' as any).findMany({
+        filters: {
+          organization: {
+            documentId: organizationDocumentId,
+          },
+          status: 'accepted',
+          email: {
+            $in: memberEmails,
+          },
+        },
+        fields: ['email', 'workspaceProjectDocumentId', 'workspaceProjectDocumentIds'],
+        sort: ['invitedAt:desc'],
+      })
+    : [];
+
+  const assignedProjectIdsByEmail = new Map<string, string[]>();
+  for (const invitation of acceptedInvitations) {
+    const email = normalizeEmail(invitation.email);
+    if (!email) continue;
+
+    const currentProjectIds = assignedProjectIdsByEmail.get(email) || [];
+    assignedProjectIdsByEmail.set(
+      email,
+      Array.from(new Set([...currentProjectIds, ...getInvitationProjectDocumentIds(invitation)])),
+    );
+  }
+
+  const assignedProjectIds = Array.from(
+    new Set(Array.from(assignedProjectIdsByEmail.values()).flat()),
+  );
+  const assignedProjects = assignedProjectIds.length
+    ? await strapi.documents('api::project.project').findMany({
+        filters: {
+          organization: {
+            documentId: organizationDocumentId,
+          },
+          documentId: {
+            $in: assignedProjectIds,
+          },
+        },
+        fields: ['documentId', 'name'],
+      })
+    : [];
+  const assignedProjectByDocumentId = new Map(
+    assignedProjects.map(project => [project.documentId, project] as const),
+  );
+
   return memberships
-    .map(membership => ({
-      documentId: membership.documentId,
-      name:
-        membership.user?.username ||
-        membership.user?.email ||
-        `Usuario ${membership.user?.id || membership.documentId}`,
-      email: membership.user?.email || '',
-      role: membership.organizationRole
-        ? {
-            documentId: membership.organizationRole.documentId,
-            code: membership.organizationRole.code,
-            name: membership.organizationRole.name,
-          }
-        : null,
-      status: membership.isActive ? 'active' : 'inactive',
-      isCurrentUser: membership.user?.id === currentUserId,
-    }))
+    .map(membership => {
+      const roleCode = membership.organizationRole?.code || '';
+      const memberEmail = normalizeEmail(membership.user?.email);
+      const workspaceProjectDocumentIds = requiresProjectAssignment(roleCode)
+        ? assignedProjectIdsByEmail.get(memberEmail) || []
+        : [];
+      const memberAssignedProjects = workspaceProjectDocumentIds
+        .map(projectDocumentId => assignedProjectByDocumentId.get(projectDocumentId))
+        .filter(Boolean)
+        .map(project => ({
+          documentId: project.documentId,
+          name: project.name || project.documentId,
+        }));
+
+      return {
+        documentId: membership.documentId,
+        name:
+          membership.user?.username ||
+          membership.user?.email ||
+          `Usuario ${membership.user?.id || membership.documentId}`,
+        email: membership.user?.email || '',
+        role: membership.organizationRole
+          ? {
+              documentId: membership.organizationRole.documentId,
+              code: membership.organizationRole.code,
+              name: membership.organizationRole.name,
+            }
+          : null,
+        status: membership.isActive ? 'active' : 'inactive',
+        isCurrentUser: membership.user?.id === currentUserId,
+        workspaceProjectDocumentIds,
+        assignedProjects: memberAssignedProjects,
+        workspaceName:
+          memberAssignedProjects.length === 1
+            ? memberAssignedProjects[0].name
+            : memberAssignedProjects.length > 1
+              ? `${memberAssignedProjects.length} proyectos asignados`
+              : null,
+      };
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -216,6 +341,8 @@ async function getInvitations(organizationDocumentId: string) {
       : null,
     invitedAt: invitation.invitedAt,
     status: invitation.status,
+    workspaceProjectDocumentIds: getInvitationProjectDocumentIds(invitation),
+    workspaceName: invitation.workspaceName || null,
   }));
 }
 
@@ -289,39 +416,67 @@ function getPublicApiUrl() {
 
 async function resolveWorkspaceBranding(
   organizationDocumentId: string,
-  workspaceProjectDocumentId?: string,
-) {
-  if (!workspaceProjectDocumentId) {
+  workspaceProjectDocumentIds: string[],
+): Promise<WorkspaceBranding> {
+  if (workspaceProjectDocumentIds.length === 0) {
     return {
       workspaceProjectDocumentId: undefined,
+      workspaceProjectDocumentIds: [],
       workspaceName: undefined,
       workspaceLogoUrl: undefined,
     };
   }
 
-  const workspaceProject = await strapi.documents('api::project.project').findOne({
-    documentId: workspaceProjectDocumentId,
-    populate: {
-      organization: true,
+  const workspaceProjects = await strapi.documents('api::project.project').findMany({
+    filters: {
+      documentId: {
+        $in: workspaceProjectDocumentIds,
+      },
+      organization: {
+        documentId: organizationDocumentId,
+      },
     },
+    fields: ['documentId', 'name', 'logoDataUrl'],
   });
 
-  if (!workspaceProject || workspaceProject.organization?.documentId !== organizationDocumentId) {
+  if (!workspaceProjects.length) {
     return {
       workspaceProjectDocumentId: undefined,
+      workspaceProjectDocumentIds: [],
       workspaceName: undefined,
       workspaceLogoUrl: undefined,
     };
   }
 
+  const projectByDocumentId = new Map(
+    workspaceProjects.map(project => [project.documentId, project] as const),
+  );
+  const validProjects = workspaceProjectDocumentIds
+    .map(projectDocumentId => projectByDocumentId.get(projectDocumentId))
+    .filter(Boolean) as typeof workspaceProjects;
+
+  if (!validProjects.length) {
+    return {
+      workspaceProjectDocumentId: undefined,
+      workspaceProjectDocumentIds: [],
+      workspaceName: undefined,
+      workspaceLogoUrl: undefined,
+    };
+  }
+
+  const primaryProject = validProjects[0];
   const publicApiUrl = getPublicApiUrl();
 
   return {
-    workspaceProjectDocumentId: workspaceProject.documentId,
-    workspaceName: workspaceProject.name || undefined,
+    workspaceProjectDocumentId: primaryProject.documentId,
+    workspaceProjectDocumentIds: validProjects.map(project => project.documentId),
+    workspaceName:
+      validProjects.length === 1
+        ? primaryProject.name || undefined
+        : `${validProjects.length} proyectos asignados`,
     workspaceLogoUrl:
-      publicApiUrl && workspaceProject.logoDataUrl
-        ? `${publicApiUrl}/api/projects/${workspaceProject.documentId}/logo`
+      publicApiUrl && primaryProject.logoDataUrl
+        ? `${publicApiUrl}/api/projects/${primaryProject.documentId}/logo`
         : undefined,
   };
 }
@@ -355,7 +510,13 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
     const payload = ctx.request.body?.data || {};
     const email = normalizeEmail(payload.email);
     const roleDocumentId = String(payload.roleDocumentId || '').trim();
-    const workspaceProjectDocumentId = String(payload.workspaceProjectDocumentId || '').trim();
+    const workspaceProjectDocumentIds = normalizeWorkspaceProjectDocumentIds(
+      payload.workspaceProjectDocumentIds,
+    );
+    const legacyWorkspaceProjectDocumentId = String(payload.workspaceProjectDocumentId || '').trim();
+    if (workspaceProjectDocumentIds.length === 0 && legacyWorkspaceProjectDocumentId) {
+      workspaceProjectDocumentIds.push(legacyWorkspaceProjectDocumentId);
+    }
 
     if (!email) {
       throw new errors.ValidationError('Email is required.');
@@ -374,8 +535,8 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
       throw new errors.ValidationError('The selected role is not valid for this organization.');
     }
 
-    if (requiresProjectAssignment(roleRecord.code) && !workspaceProjectDocumentId) {
-      throw new errors.ValidationError('Manager and Viewer invitations require a project assignment.');
+    if (requiresProjectAssignment(roleRecord.code) && workspaceProjectDocumentIds.length === 0) {
+      throw new errors.ValidationError('Manager and Viewer invitations require at least one project assignment.');
     }
 
     const existingUser = await input.strapi.db.query('plugin::users-permissions.user').findOne({
@@ -426,7 +587,7 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
 
     const workspaceBranding = await dependencies.resolveWorkspaceBranding(
       teamContext.organizationDocumentId,
-      workspaceProjectDocumentId || undefined,
+      workspaceProjectDocumentIds,
     );
 
     const created = await input.strapi.db
@@ -440,6 +601,7 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
           organizationRole: roleRecord.id,
           invitedBy: userId,
           workspaceProjectDocumentId: workspaceBranding.workspaceProjectDocumentId || null,
+          workspaceProjectDocumentIds: workspaceBranding.workspaceProjectDocumentIds || [],
           workspaceName: workspaceBranding.workspaceName || null,
         },
       });
@@ -552,6 +714,120 @@ export function createUpdateMemberRoleHandler(input: {
         organizationRole: roleDocumentId,
       },
     });
+
+    ctx.body = await dependencies.buildTeamPayload(userId);
+  };
+}
+
+function resolveUpdateMemberProjectsDependencies(
+  overrides?: Partial<UpdateMemberProjectsDependencies>,
+): UpdateMemberProjectsDependencies {
+  return {
+    ensureOwnerAccess,
+    resolveWorkspaceBranding,
+    buildTeamPayload,
+    ...overrides,
+  };
+}
+
+export function createUpdateMemberProjectsHandler(input: {
+  strapi: typeof globalThis.strapi;
+  dependencies?: Partial<UpdateMemberProjectsDependencies>;
+}) {
+  const dependencies = resolveUpdateMemberProjectsDependencies(input.dependencies);
+
+  return async function updateMemberProjects(ctx: any) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const teamContext = await dependencies.ensureOwnerAccess(userId);
+    const membershipDocumentId = String(ctx.params.documentId || '').trim();
+    const workspaceProjectDocumentIds = normalizeWorkspaceProjectDocumentIds(
+      ctx.request.body?.data?.workspaceProjectDocumentIds,
+    );
+
+    if (!membershipDocumentId) {
+      throw new errors.ValidationError('Membership is required.');
+    }
+
+    const membership = await input.strapi
+      .documents('api::organization-membership.organization-membership')
+      .findOne({
+        documentId: membershipDocumentId,
+        populate: {
+          organization: true,
+          user: true,
+          organizationRole: true,
+        },
+      });
+
+    if (!membership || membership.organization?.documentId !== teamContext.organizationDocumentId) {
+      throw new errors.NotFoundError('Membership not found.');
+    }
+
+    if (!requiresProjectAssignment(membership.organizationRole?.code)) {
+      throw new errors.ValidationError(
+        'Only Manager and Viewer members support project-scoped access assignments.',
+      );
+    }
+
+    if (workspaceProjectDocumentIds.length === 0) {
+      throw new errors.ValidationError(
+        'Manager and Viewer members require at least one assigned project.',
+      );
+    }
+
+    const normalizedEmail = normalizeEmail(membership.user?.email);
+    if (!normalizedEmail) {
+      throw new errors.ValidationError('The selected member does not have a valid email.');
+    }
+
+    const acceptedInvitations = await input.strapi.documents(
+      'api::organization-invitation.organization-invitation' as any,
+    ).findMany({
+      filters: {
+        organization: {
+          documentId: teamContext.organizationDocumentId,
+        },
+        email: normalizedEmail,
+        status: 'accepted',
+      },
+      fields: ['documentId'],
+      sort: ['invitedAt:desc'],
+    });
+
+    if (!acceptedInvitations.length) {
+      throw new errors.ValidationError(
+        'No accepted invitation was found to update this member project access.',
+      );
+    }
+
+    const workspaceBranding = await dependencies.resolveWorkspaceBranding(
+      teamContext.organizationDocumentId,
+      workspaceProjectDocumentIds,
+    );
+
+    if (!workspaceBranding.workspaceProjectDocumentIds?.length) {
+      throw new errors.ValidationError(
+        'At least one valid project from this organization must be assigned.',
+      );
+    }
+
+    await Promise.all(
+      acceptedInvitations.map(invitation =>
+        input.strapi.documents('api::organization-invitation.organization-invitation' as any).update({
+          documentId: invitation.documentId,
+          data: {
+            workspaceProjectDocumentId: workspaceBranding.workspaceProjectDocumentId || null,
+            workspaceProjectDocumentIds: workspaceBranding.workspaceProjectDocumentIds || [],
+            workspaceName: workspaceBranding.workspaceName || null,
+          },
+        }),
+      ),
+    );
 
     ctx.body = await dependencies.buildTeamPayload(userId);
   };
@@ -746,6 +1022,10 @@ export default {
     return createUpdateMemberRoleHandler({ strapi })(ctx);
   },
 
+  async updateMemberProjects(ctx) {
+    return createUpdateMemberProjectsHandler({ strapi })(ctx);
+  },
+
   async deactivateMember(ctx) {
     return createDeactivateMemberHandler({ strapi })(ctx);
   },
@@ -784,7 +1064,7 @@ export default {
 
     const workspaceBranding = await resolveWorkspaceBranding(
       teamContext.organizationDocumentId,
-      invitation.workspaceProjectDocumentId || undefined,
+      getInvitationProjectDocumentIds(invitation),
     );
 
     try {
