@@ -2071,6 +2071,7 @@ export interface ApiTestRunResultTestRunResult
     > &
       Schema.Attribute.Private;
     notes: Schema.Attribute.Text;
+    orderIndex: Schema.Attribute.Integer;
     organization: Schema.Attribute.Relation<
       'manyToOne',
       'api::organization.organization'

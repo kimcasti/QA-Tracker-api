@@ -10,6 +10,9 @@
     "draftAndPublish": false
   },
   "attributes": {
+    "orderIndex": {
+      "type": "integer"
+    },
     "result": {
       "type": "enumeration",
       "enum": ["passed", "failed", "blocked", "not_executed"],

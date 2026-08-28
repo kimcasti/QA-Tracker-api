@@ -136,6 +136,7 @@ async function getTestRunForSession(testRunDocumentId: string) {
       project: true,
       sprint: true,
       results: {
+        sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
         populate: {
           functionality: true,
           testCase: true,
@@ -164,6 +165,7 @@ async function getSessionByTestRun(testRunDocumentId: string) {
       testRun: {
         populate: {
           results: {
+            sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
             populate: {
               functionality: true,
               testCase: true,
@@ -186,6 +188,7 @@ async function getSessionByDocumentId(sessionDocumentId: string) {
         populate: {
           sprint: true,
           results: {
+            sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
             populate: {
               functionality: true,
               testCase: true,
@@ -558,6 +561,7 @@ export default factories.createCoreController(
             populate: {
               sprint: true,
               results: {
+                sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
                 populate: {
                   functionality: true,
                   testCase: true,
@@ -667,6 +671,7 @@ export default factories.createCoreController(
             populate: {
               sprint: true,
               results: {
+                sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
                 populate: {
                   functionality: true,
                   testCase: true,

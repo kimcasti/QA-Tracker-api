@@ -7,6 +7,7 @@ import {
 } from '../../../utils/tenant';
 
 type TestRunResultPayload = {
+  orderIndex?: number | null;
   result?:
     | 'passed'
     | 'failed'
@@ -68,6 +69,7 @@ const syncedTestRunPopulate = {
     },
   },
   results: {
+    sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
     populate: {
       functionality: true,
       testCase: true,
@@ -312,6 +314,10 @@ function buildTestRunResultData(
   bugDocumentId?: string | null,
 ) {
   const data: Record<string, unknown> = {
+    orderIndex:
+      typeof payload.orderIndex === 'number' && Number.isFinite(payload.orderIndex)
+        ? payload.orderIndex
+        : null,
     result: payload.result || 'not_executed',
     notes: payload.notes || null,
     evidenceImage: payload.evidenceImage || null,
@@ -360,6 +366,7 @@ async function getRunResults(testRunDocumentId: string) {
     filters: {
       testRun: { documentId: testRunDocumentId },
     },
+    sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
     populate: testRunResultPopulate,
   })) as any[];
 }
