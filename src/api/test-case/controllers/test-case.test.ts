@@ -212,3 +212,109 @@ test('test-case create resolves functionality by code and persists normalized pa
     data: { documentId: 'tc-3', title: 'Caso login' },
   });
 });
+
+test('test-case reorder updates only the requested sort orders for the same functionality', async () => {
+  const updates: Array<Record<string, any>> = [];
+  const records = {
+    'tc-1': {
+      documentId: 'tc-1',
+      sortOrder: 0,
+      organization: { documentId: 'org-1' },
+      project: { documentId: 'proj-1' },
+      functionality: { documentId: 'func-1' },
+    },
+    'tc-2': {
+      documentId: 'tc-2',
+      sortOrder: 1,
+      organization: { documentId: 'org-1' },
+      project: { documentId: 'proj-1' },
+      functionality: { documentId: 'func-1' },
+    },
+  };
+  const controller = createTestCaseController({
+    strapi: {
+      documents(uid: string) {
+        if (uid !== 'api::test-case.test-case') throw new Error(`Unexpected uid: ${uid}`);
+        return {
+          findOne: async ({ documentId }: { documentId: keyof typeof records }) => records[documentId],
+          update: async (input: Record<string, any>) => {
+            updates.push(input);
+            return { documentId: input.documentId, ...input.data };
+          },
+        };
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => 'org-1',
+    },
+  });
+
+  const ctx = createCtx({
+    items: [
+      { documentId: 'tc-1', sortOrder: 1 },
+      { documentId: 'tc-2', sortOrder: 0 },
+    ],
+  });
+
+  await controller.reorder(ctx as any);
+
+  assert.deepEqual(
+    updates.map(item => ({ documentId: item.documentId, data: item.data })),
+    [
+      {
+        documentId: 'tc-1',
+        data: { sortOrder: 1, organization: 'org-1', project: 'proj-1', functionality: 'func-1' },
+      },
+      {
+        documentId: 'tc-2',
+        data: { sortOrder: 0, organization: 'org-1', project: 'proj-1', functionality: 'func-1' },
+      },
+    ],
+  );
+});
+
+test('test-case reorder rejects cases from different functionalities', async () => {
+  const controller = createTestCaseController({
+    strapi: {
+      documents(uid: string) {
+        if (uid !== 'api::test-case.test-case') throw new Error(`Unexpected uid: ${uid}`);
+        return {
+          findOne: async ({ documentId }: { documentId: string }) => ({
+            documentId,
+            organization: { documentId: 'org-1' },
+            project: { documentId: 'proj-1' },
+            functionality: { documentId: documentId === 'tc-1' ? 'func-1' : 'func-2' },
+          }),
+          update: async () => {
+            throw new Error('update() should not be called for mixed functionalities');
+          },
+        };
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => 'org-1',
+    },
+  });
+
+  const ctx = createCtx({
+    items: [
+      { documentId: 'tc-1', sortOrder: 1 },
+      { documentId: 'tc-2', sortOrder: 0 },
+    ],
+  });
+
+  await assert.rejects(() => controller.reorder(ctx as any), (error: unknown) => {
+    assert.ok(error instanceof errors.ValidationError);
+    assert.equal(
+      (error as Error).message,
+      'All reordered test cases must belong to the same project, organization and functionality.',
+    );
+    return true;
+  });
+});

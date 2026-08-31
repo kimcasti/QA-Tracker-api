@@ -257,6 +257,10 @@ async function validatePublicSessionToken(rawToken: string) {
 function mapPublicResultItem(result: any) {
   return {
     documentId: result.documentId,
+    orderIndex:
+      typeof result.orderIndex === 'number' && Number.isFinite(result.orderIndex)
+        ? result.orderIndex
+        : null,
     result: result.result,
     notes: result.notes || '',
     evidenceImage: result.evidenceImage || null,

@@ -165,6 +165,7 @@ test('functionality create persists normalized data when validation passes', asy
     impactLevel: 'medium',
     probabilityLevel: 'medium',
     storyLegacyId: null,
+    sortOrder: 0,
     personaRoles: {
       connect: [{ documentId: 'role-1' }, { documentId: 'role-2' }],
     },
@@ -217,5 +218,147 @@ test('functionality create accepts an empty persona role set', async () => {
 
   assert.deepEqual(createdPayload?.data?.personaRoles, {
     set: [],
+  });
+});
+
+test('functionality reorder updates only the requested sort orders for the same project', async () => {
+  const updates: Array<{ documentId: string; data: Record<string, unknown> }> = [];
+
+  const records = new Map([
+    [
+      'func-1',
+      {
+        documentId: 'func-1',
+        code: 'AUTH-01',
+        sortOrder: 0,
+        project: { documentId: 'proj-1' },
+        organization: { documentId: 'org-1' },
+      },
+    ],
+    [
+      'func-2',
+      {
+        documentId: 'func-2',
+        code: 'AUTH-02',
+        sortOrder: 1,
+        project: { documentId: 'proj-1' },
+        organization: { documentId: 'org-1' },
+      },
+    ],
+  ]);
+
+  const controller = createFunctionalityController({
+    strapi: {
+      documents(uid: string) {
+        if (uid === 'api::functionality.functionality') {
+          return {
+            findOne: async ({ documentId }: { documentId: string }) => records.get(documentId) ?? null,
+            update: async ({
+              documentId,
+              data,
+            }: {
+              documentId: string;
+              data: Record<string, unknown>;
+            }) => {
+              updates.push({ documentId, data });
+              return { documentId, ...data };
+            },
+          };
+        }
+
+        throw new Error(`Unexpected uid: ${uid}`);
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => 'org-1',
+    },
+  });
+
+  const ctx = createCtx({
+    items: [
+      { documentId: 'func-1', sortOrder: 1 },
+      { documentId: 'func-2', sortOrder: 0 },
+    ],
+  });
+
+  await controller.reorder(ctx as any);
+
+  assert.deepEqual(updates, [
+    {
+      documentId: 'func-1',
+      data: {
+        sortOrder: 1,
+        organization: 'org-1',
+        project: 'proj-1',
+      },
+    },
+    {
+      documentId: 'func-2',
+      data: {
+        sortOrder: 0,
+        organization: 'org-1',
+        project: 'proj-1',
+      },
+    },
+  ]);
+});
+
+test('functionality reorder rejects mixed-project payloads', async () => {
+  const records = new Map([
+    [
+      'func-1',
+      {
+        documentId: 'func-1',
+        project: { documentId: 'proj-1' },
+        organization: { documentId: 'org-1' },
+      },
+    ],
+    [
+      'func-2',
+      {
+        documentId: 'func-2',
+        project: { documentId: 'proj-2' },
+        organization: { documentId: 'org-1' },
+      },
+    ],
+  ]);
+
+  const controller = createFunctionalityController({
+    strapi: {
+      documents(uid: string) {
+        if (uid === 'api::functionality.functionality') {
+          return {
+            findOne: async ({ documentId }: { documentId: string }) => records.get(documentId) ?? null,
+            update: async () => {
+              throw new Error('Update should not be called for mixed-project payloads.');
+            },
+          };
+        }
+
+        throw new Error(`Unexpected uid: ${uid}`);
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => 'org-1',
+    },
+  });
+
+  const ctx = createCtx({
+    items: [
+      { documentId: 'func-1', sortOrder: 1 },
+      { documentId: 'func-2', sortOrder: 0 },
+    ],
+  });
+
+  await assert.rejects(() => controller.reorder(ctx as any), (error: unknown) => {
+    assert.ok(error instanceof errors.ValidationError);
+    assert.match((error as Error).message, /same project and organization/i);
+    return true;
   });
 });

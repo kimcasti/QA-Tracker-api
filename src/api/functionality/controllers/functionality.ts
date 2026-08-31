@@ -45,6 +45,22 @@ type CreateFunctionalityControllerInput = {
   dependencies?: Partial<FunctionalityControllerDependencies>;
 };
 
+type ReorderRequestItem = {
+  documentId?: string;
+  sortOrder?: number | null;
+};
+
+type FunctionalityDocumentWithRelations = {
+  documentId: string;
+  sortOrder?: number | null;
+  project?: {
+    documentId?: string;
+  } | null;
+  organization?: {
+    documentId?: string;
+  } | null;
+};
+
 function hasOwnProperty<T extends object>(value: T, key: keyof any) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -223,6 +239,99 @@ export function createFunctionalityController(input: CreateFunctionalityControll
   };
 
   return {
+  async reorder(ctx) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const rawItems = ctx.request.body?.data?.items;
+    const items = Array.isArray(rawItems) ? (rawItems as ReorderRequestItem[]) : [];
+
+    if (items.length === 0) {
+      throw new errors.ValidationError('At least one functionality reorder item is required.');
+    }
+
+    const normalizedItems = items
+      .map(item => ({
+        documentId: typeof item?.documentId === 'string' ? item.documentId : '',
+        sortOrder:
+          typeof item?.sortOrder === 'number' && Number.isFinite(item.sortOrder)
+            ? item.sortOrder
+            : null,
+      }))
+      .filter(
+        (item): item is { documentId: string; sortOrder: number } =>
+          Boolean(item.documentId) && item.sortOrder !== null,
+      );
+
+    if (normalizedItems.length !== items.length) {
+      throw new errors.ValidationError('Each reorder item must include documentId and sortOrder.');
+    }
+
+    const existingRecords = (await Promise.all(
+      normalizedItems.map(item =>
+        input.strapi.documents('api::functionality.functionality').findOne({
+          documentId: item.documentId,
+          populate: {
+            organization: true,
+            project: true,
+          },
+        }),
+      ),
+    )) as Array<FunctionalityDocumentWithRelations | null>;
+
+    if (existingRecords.some(item => !item)) {
+      throw new errors.NotFoundError('One or more functionalities were not found.');
+    }
+
+    const firstRecord = existingRecords[0];
+    const sharedProjectDocumentId = firstRecord?.project?.documentId ?? null;
+    const sharedOrganizationDocumentId = firstRecord?.organization?.documentId ?? null;
+
+    if (!sharedProjectDocumentId || !sharedOrganizationDocumentId) {
+      throw new errors.ValidationError('Functionality project and organization are required.');
+    }
+
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, {
+      project: sharedProjectDocumentId,
+      organization: sharedOrganizationDocumentId,
+    });
+
+    if (organizationDocumentId !== sharedOrganizationDocumentId) {
+      throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+    }
+
+    const mismatchedRecord = existingRecords.find(
+      item =>
+        item?.project?.documentId !== sharedProjectDocumentId ||
+        item?.organization?.documentId !== sharedOrganizationDocumentId,
+    );
+
+    if (mismatchedRecord) {
+      throw new errors.ValidationError(
+        'All reordered functionalities must belong to the same project and organization.',
+      );
+    }
+
+    const updatedRecords = await Promise.all(
+      normalizedItems.map(item =>
+        input.strapi.documents('api::functionality.functionality').update({
+          documentId: item.documentId,
+          data: {
+            sortOrder: item.sortOrder,
+            organization: sharedOrganizationDocumentId,
+            project: sharedProjectDocumentId,
+          } as any,
+          populate: responsePopulate as any,
+        }),
+      ),
+    );
+
+    ctx.body = { data: updatedRecords };
+  },
+
   async create(ctx) {
     const userId = ctx.state.user?.id;
 

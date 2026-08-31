@@ -62,6 +62,11 @@ type CreateTestCaseControllerInput = {
   dependencies?: Partial<TestCaseControllerDependencies>;
 };
 
+type ReorderRequestItem = {
+  documentId?: string;
+  sortOrder?: number | null;
+};
+
 function extractRelationDocumentId(rawValue: unknown): string | null {
   if (!rawValue) return null;
   if (typeof rawValue === 'string') return rawValue;
@@ -209,6 +214,103 @@ export function createTestCaseController(input: CreateTestCaseControllerInput) {
   };
 
   return {
+  async reorder(ctx) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const rawItems = ctx.request.body?.data?.items;
+    const items = Array.isArray(rawItems) ? (rawItems as ReorderRequestItem[]) : [];
+
+    if (items.length === 0) {
+      throw new errors.ValidationError('At least one test case reorder item is required.');
+    }
+
+    const normalizedItems = items
+      .map(item => ({
+        documentId: typeof item?.documentId === 'string' ? item.documentId : '',
+        sortOrder:
+          typeof item?.sortOrder === 'number' && Number.isFinite(item.sortOrder)
+            ? item.sortOrder
+            : null,
+      }))
+      .filter(
+        (item): item is { documentId: string; sortOrder: number } =>
+          Boolean(item.documentId) && item.sortOrder !== null,
+      );
+
+    if (normalizedItems.length !== items.length) {
+      throw new errors.ValidationError('Each reorder item must include documentId and sortOrder.');
+    }
+
+    const existingRecords = (await Promise.all(
+      normalizedItems.map(item =>
+        input.strapi.documents('api::test-case.test-case').findOne({
+          documentId: item.documentId,
+          populate: {
+            organization: true,
+            project: true,
+            functionality: true,
+          },
+        }),
+      ),
+    )) as Array<TestCaseDocumentWithRelations | null>;
+
+    if (existingRecords.some(item => !item)) {
+      throw new errors.NotFoundError('One or more test cases were not found.');
+    }
+
+    const firstRecord = existingRecords[0];
+    const sharedProjectDocumentId = firstRecord?.project?.documentId ?? null;
+    const sharedOrganizationDocumentId = firstRecord?.organization?.documentId ?? null;
+    const sharedFunctionalityDocumentId = firstRecord?.functionality?.documentId ?? null;
+
+    if (!sharedProjectDocumentId || !sharedOrganizationDocumentId || !sharedFunctionalityDocumentId) {
+      throw new errors.ValidationError('Test case project, organization and functionality are required.');
+    }
+
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, {
+      project: sharedProjectDocumentId,
+      organization: sharedOrganizationDocumentId,
+    });
+
+    if (organizationDocumentId !== sharedOrganizationDocumentId) {
+      throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+    }
+
+    const mismatchedRecord = existingRecords.find(
+      item =>
+        item?.project?.documentId !== sharedProjectDocumentId ||
+        item?.organization?.documentId !== sharedOrganizationDocumentId ||
+        item?.functionality?.documentId !== sharedFunctionalityDocumentId,
+    );
+
+    if (mismatchedRecord) {
+      throw new errors.ValidationError(
+        'All reordered test cases must belong to the same project, organization and functionality.',
+      );
+    }
+
+    const updatedRecords = await Promise.all(
+      normalizedItems.map(item =>
+        input.strapi.documents('api::test-case.test-case').update({
+          documentId: item.documentId,
+          data: {
+            sortOrder: item.sortOrder,
+            organization: sharedOrganizationDocumentId,
+            project: sharedProjectDocumentId,
+            functionality: sharedFunctionalityDocumentId,
+          } as any,
+          populate: responsePopulate as any,
+        }),
+      ),
+    );
+
+    ctx.body = { data: updatedRecords };
+  },
+
   async find(this: any, ctx) {
     await this.validateQuery(ctx);
     const sanitizedQuery = await this.sanitizeQuery(ctx);
