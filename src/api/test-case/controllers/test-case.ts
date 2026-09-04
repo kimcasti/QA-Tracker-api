@@ -41,9 +41,11 @@ type TestCaseDocumentWithRelations = {
   sortOrder?: number | null;
   project?: {
     documentId?: string;
+    key?: string;
   } | null;
   functionality?: {
     documentId?: string;
+    code?: string;
   } | null;
   organization?: {
     documentId?: string;
@@ -454,6 +456,47 @@ export function createTestCaseController(input: CreateTestCaseControllerInput) {
     });
 
     ctx.body = { data: updated };
+  },
+
+  async delete(ctx) {
+    const userId = ctx.state.user?.id;
+
+    if (!userId) {
+      throw new errors.UnauthorizedError('Authentication is required.');
+    }
+
+    const documentId = ctx.params.documentId || ctx.params.id;
+    if (!documentId) {
+      throw new errors.ValidationError('Test case documentId is required.');
+    }
+
+    const existing = (await input.strapi.documents('api::test-case.test-case').findOne({
+      documentId,
+      populate: {
+        organization: true,
+        project: true,
+        functionality: true,
+      } as any,
+    })) as TestCaseDocumentWithRelations | null;
+
+    if (!existing) {
+      throw new errors.NotFoundError('Test case not found.');
+    }
+
+    const organizationDocumentId = await resolveOrganizationDocumentId(input, userId, {
+      project: existing.project?.documentId,
+      organization: existing.organization?.documentId,
+    });
+
+    if (organizationDocumentId !== existing.organization?.documentId) {
+      throw new errors.ForbiddenError('Cross-organization access is not allowed.');
+    }
+
+    const deleted = await input.strapi.documents('api::test-case.test-case').delete({
+      documentId,
+    });
+
+    ctx.body = { data: deleted };
   },
   };
 }

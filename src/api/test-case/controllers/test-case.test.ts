@@ -318,3 +318,43 @@ test('test-case reorder rejects cases from different functionalities', async () 
     return true;
   });
 });
+
+test('test-case delete removes the document using documentId', async () => {
+  const deletedInputs: Array<Record<string, unknown>> = [];
+
+  const controller = createTestCaseController({
+    strapi: {
+      documents(uid: string) {
+        if (uid !== 'api::test-case.test-case') throw new Error(`Unexpected uid: ${uid}`);
+        return {
+          findOne: async ({ documentId }: { documentId: string }) => ({
+            documentId,
+            organization: { documentId: 'org-1' },
+            project: { documentId: 'proj-1' },
+            functionality: { documentId: 'func-1' },
+          }),
+          delete: async (input: Record<string, unknown>) => {
+            deletedInputs.push(input);
+            return { documentId: input.documentId };
+          },
+        };
+      },
+    } as any,
+    dependencies: {
+      getUserMemberships: async () =>
+        [{ organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' } }] as any,
+      getAllowedOrganizationDocumentIds: () => ['org-1'],
+      getOrganizationDocumentIdFromPayload: async () => 'org-1',
+    },
+  });
+
+  const ctx = createCtx({});
+  ctx.params = { id: 'tc-9' };
+
+  await controller.delete(ctx as any);
+
+  assert.deepEqual(deletedInputs, [{ documentId: 'tc-9' }]);
+  assert.deepEqual(ctx.body, {
+    data: { documentId: 'tc-9' },
+  });
+});
