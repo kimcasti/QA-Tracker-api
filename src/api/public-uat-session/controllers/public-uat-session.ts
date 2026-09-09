@@ -190,7 +190,7 @@ async function getSessionByDocumentId(sessionDocumentId: string) {
           results: {
             sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
             populate: {
-              functionality: true,
+              functionality: { populate: { module: { fields: ['name'] } } },
               testCase: true,
               bug: true,
             },
@@ -269,7 +269,7 @@ function mapPublicResultItem(result: any) {
           documentId: result.functionality.documentId,
           code: result.functionality.code || null,
           name: result.functionality.name || '',
-          module: result.functionality.module || '',
+          module: result.functionality.module?.name || '',
         }
       : null,
     testCase: result.testCase
@@ -567,7 +567,7 @@ export default factories.createCoreController(
               results: {
                 sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
                 populate: {
-                  functionality: true,
+                  functionality: { populate: { module: { fields: ['name'] } } },
                   testCase: true,
                   bug: true,
                 },
@@ -631,7 +631,7 @@ export default factories.createCoreController(
             : {}),
         } as any,
         populate: {
-          functionality: true,
+          functionality: { populate: { module: { fields: ['name'] } } },
           testCase: true,
           bug: true,
         },
@@ -677,7 +677,7 @@ export default factories.createCoreController(
               results: {
                 sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
                 populate: {
-                  functionality: true,
+                  functionality: { populate: { module: { fields: ['name'] } } },
                   testCase: true,
                   bug: true,
                 },
