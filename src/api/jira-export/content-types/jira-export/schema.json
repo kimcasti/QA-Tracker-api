@@ -1,0 +1,16 @@
+{
+  "kind": "collectionType",
+  "collectionName": "jira_exports",
+  "info": { "singularName": "jira-export", "pluralName": "jira-exports", "displayName": "Jira Export" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "exportKey": { "type": "string", "required": true, "unique": true },
+    "organizationId": { "type": "string", "required": true },
+    "projectId": { "type": "string", "required": true },
+    "userId": { "type": "integer", "required": true },
+    "state": { "type": "enumeration", "enum": ["processing", "created", "uncertain", "rejected"], "required": true },
+    "issueKey": { "type": "string" },
+    "issueUrl": { "type": "string" },
+    "attachmentState": { "type": "enumeration", "enum": ["none", "uploaded", "failed"] }
+  }
+}

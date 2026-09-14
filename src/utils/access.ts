@@ -40,7 +40,12 @@ export const ACCESS_ROLE_SEEDS: Array<{
   },
 ];
 
+export const JIRA_ACTIONS = ['status', 'projects', 'types', 'configure', 'createIssue'].map(
+  action => `api::jira-integration.jira-integration.${action}`,
+);
+
 export const EXPOSED_ACTIONS = [
+  ...JIRA_ACTIONS,
   'api::participant-directory.participant-directory.members',
   'api::external-participant.external-participant.find',
   'api::external-participant.external-participant.findOne',
@@ -107,6 +112,8 @@ export const EXPOSED_ACTIONS = [
   'api::test-run.test-run.create',
   'api::test-run.test-run.update',
   'api::test-run.test-run.delete',
+  'api::automation-ingestion.automation-ingestion.openRun',
+  'api::automation-ingestion.automation-ingestion.publishResults',
   'api::automation-import-history.automation-import-history.find',
   'api::automation-import-history.automation-import-history.findOne',
   'api::automation-import-history.automation-import-history.create',
@@ -158,6 +165,7 @@ export const EXPOSED_ACTIONS = [
   'api::me.me.updateOrganization',
   'api::ai.ai.generateTestCases',
   'api::ai.ai.improveMeetingNotes',
+  'api::ai.ai.interpretExecutionEvidence',
   'api::ai.ai.recommendExecutionFunctionalities',
   'api::ai.ai.analyzeQaStrategyCandidates',
   'api::ai.ai.analyzeProject',

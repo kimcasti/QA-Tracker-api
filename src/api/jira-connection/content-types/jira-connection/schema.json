@@ -1,0 +1,12 @@
+{
+  "kind": "collectionType",
+  "collectionName": "jira_connections",
+  "info": { "singularName": "jira-connection", "pluralName": "jira-connections", "displayName": "Jira Connection" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "projectId": { "type": "string", "required": true, "unique": true },
+    "organizationId": { "type": "string", "required": true },
+    "userId": { "type": "integer", "required": true },
+    "destination": { "type": "json", "private": true }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "collectionType", "collectionName": "jira_oauth_accounts",
+  "info": { "singularName": "jira-oauth-account", "pluralName": "jira-oauth-accounts", "displayName": "Jira OAuth Account" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "userId": { "type": "integer", "unique": true, "required": true, "private": true },
+    "state": { "type": "enumeration", "enum": ["legacy", "active", "disconnected", "reconnect"], "required": true },
+    "revision": { "type": "string", "required": true, "private": true },
+    "encryptedGrant": { "type": "text", "private": true },
+    "site": { "type": "string" }, "cloudId": { "type": "string" }, "accountName": { "type": "string" },
+    "refreshLock": { "type": "string", "private": true }, "lockExpiresAt": { "type": "datetime", "private": true }
+  }
+}

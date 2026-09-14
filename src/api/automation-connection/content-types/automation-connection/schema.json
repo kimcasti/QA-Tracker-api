@@ -1,0 +1,17 @@
+{
+  "kind": "collectionType",
+  "collectionName": "automation_connections",
+  "info": { "singularName": "automation-connection", "pluralName": "automation-connections", "displayName": "Automation Connection" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "tokenHash": { "type": "string", "required": true, "unique": true, "private": true },
+    "code": { "type": "string", "unique": true, "private": true },
+    "label": { "type": "string", "required": true },
+    "state": { "type": "enumeration", "enum": ["pending", "active", "revoked"], "required": true },
+    "userId": { "type": "integer", "private": true },
+    "projectId": { "type": "string" },
+    "projectKey": { "type": "string" },
+    "projectName": { "type": "string" },
+    "expiresAt": { "type": "datetime", "required": true }
+  }
+}

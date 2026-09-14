@@ -50,6 +50,7 @@ type BatchTestRunResultSyncPayload = {
   removeMissingResults?: boolean | null;
   items?: BatchTestRunResultSyncItem[] | null;
 };
+import { syncBatchTestRunResults } from '../services/test-run-result';
 
 const testRunResultPopulate = {
   organization: true,
@@ -100,7 +101,6 @@ function extractRelationDocumentId(rawValue: unknown): string | null {
 
   return null;
 }
-
 async function resolveOrganizationDocumentId(userId: number, payload: TestRunResultPayload) {
   const memberships = await getUserMemberships(strapi, userId);
   const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
@@ -404,7 +404,6 @@ async function getProjectBugCatalog(projectDocumentId: string) {
     fields: ['documentId', 'internalBugId', 'externalBugId'],
   })) as BugCatalogRecord[];
 }
-
 export default factories.createCoreController('api::test-run-result.test-run-result', () => ({
   async create(ctx) {
     const userId = ctx.state.user?.id;
@@ -538,165 +537,7 @@ export default factories.createCoreController('api::test-run-result.test-run-res
     }
 
     const payload = (ctx.request.body?.data || {}) as BatchTestRunResultSyncPayload;
-    const testRunDocumentId = extractRelationDocumentId(payload.testRun);
-    const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
-    const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
-    const shouldRemoveMissingResults = payload.removeMissingResults !== false;
-    const items = Array.isArray(payload.items) ? payload.items : [];
-
-    if (!testRunDocumentId) {
-      throw new errors.ValidationError('Test run result testRun is required.');
-    }
-
-    const testRun = await strapi.documents('api::test-run.test-run').findOne({
-      documentId: testRunDocumentId,
-      populate: {
-        organization: true,
-        project: true,
-      },
-    });
-
-    if (!testRun) {
-      throw new errors.NotFoundError('Test run not found.');
-    }
-
-    const projectDocumentId = requestedProjectDocumentId ?? testRun.project?.documentId ?? null;
-    if (!projectDocumentId) {
-      throw new errors.ValidationError('Test run result project is required.');
-    }
-
-    const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
-      project: projectDocumentId,
-      organization: requestedOrganizationDocumentId ?? testRun.organization?.documentId ?? null,
-    });
-
-    const [existingResults, projectFunctionalities, projectTestCases, projectBugs] =
-      await Promise.all([
-        getRunResults(testRunDocumentId),
-        getProjectFunctionalityCatalog(projectDocumentId),
-        getProjectTestCaseCatalog(projectDocumentId),
-        getProjectBugCatalog(projectDocumentId),
-      ]);
-
-    const resolveFunctionalityFromCatalog = buildDocumentIdResolver(
-      projectFunctionalities,
-      [record => record.code],
-    );
-    const resolveTestCaseFromCatalog = buildDocumentIdResolver(projectTestCases, [
-      record => record.title,
-    ]);
-    const resolveBugFromCatalog = buildDocumentIdResolver(projectBugs, [
-      record => record.internalBugId,
-      record => record.externalBugId,
-    ]);
-
-    const existingResultsByDocumentId = new Map(
-      existingResults.map(item => [item.documentId, item]),
-    );
-    const existingResultsByIdentity = new Map(
-      existingResults.map(item => [
-        buildResultIdentity({
-          functionalityDocumentId: item.functionality?.documentId,
-          functionalityCode: item.functionality?.code,
-          testCaseDocumentId: item.testCase?.documentId,
-        }),
-        item,
-      ]),
-    );
-
-    const normalizedItemsByIdentity = new Map<string, NormalizedBatchTestRunResultSyncItem>();
-    items.forEach(item => {
-      const resultPayload = (item?.data || {}) as TestRunResultPayload;
-      const functionalityDocumentId = resolveFunctionalityFromCatalog(resultPayload.functionality);
-      const testCaseDocumentId = resolveTestCaseFromCatalog(resultPayload.testCase);
-      const bugDocumentId = resolveBugFromCatalog(resultPayload.bug);
-      const resultIdentity = buildResultIdentity({
-        functionalityDocumentId,
-        testCaseDocumentId,
-      });
-
-      normalizedItemsByIdentity.set(resultIdentity, {
-        documentId: item?.documentId || null,
-        resultPayload,
-        functionalityDocumentId,
-        testCaseDocumentId,
-        bugDocumentId,
-        resultIdentity,
-      });
-    });
-
-    const savedResultIds = new Set<string>();
-
-    for (const item of normalizedItemsByIdentity.values()) {
-      const {
-        documentId,
-        resultPayload,
-        functionalityDocumentId,
-        testCaseDocumentId,
-        bugDocumentId,
-        resultIdentity,
-      } = item;
-
-      const existingResult =
-        (documentId ? existingResultsByDocumentId.get(documentId) : undefined) ||
-        existingResultsByIdentity.get(resultIdentity);
-
-      if (existingResult) {
-        const updated = await strapi.documents('api::test-run-result.test-run-result').update({
-          documentId: existingResult.documentId,
-          data: {
-            ...buildTestRunResultData(
-              resultPayload,
-              projectDocumentId,
-              functionalityDocumentId ?? existingResult.functionality?.documentId ?? null,
-              testCaseDocumentId ?? existingResult.testCase?.documentId ?? null,
-              bugDocumentId ?? existingResult.bug?.documentId ?? null,
-            ),
-            organization: organizationDocumentId,
-            testRun: testRunDocumentId,
-          } as any,
-          populate: testRunResultPopulate,
-        });
-
-        savedResultIds.add(updated.documentId);
-        existingResultsByDocumentId.set(updated.documentId, updated);
-        existingResultsByIdentity.set(resultIdentity, updated);
-        continue;
-      }
-
-      const created = await strapi.documents('api::test-run-result.test-run-result').create({
-        data: {
-          ...buildTestRunResultData(
-            resultPayload,
-            projectDocumentId,
-            functionalityDocumentId,
-            testCaseDocumentId,
-            bugDocumentId,
-          ),
-          organization: organizationDocumentId,
-          testRun: testRunDocumentId,
-        } as any,
-        populate: testRunResultPopulate,
-      });
-
-      savedResultIds.add(created.documentId);
-      existingResultsByDocumentId.set(created.documentId, created);
-      existingResultsByIdentity.set(resultIdentity, created);
-    }
-
-    if (shouldRemoveMissingResults) {
-      await Promise.all(
-        existingResults
-          .filter(item => !savedResultIds.has(item.documentId))
-          .map(item =>
-            strapi.documents('api::test-run-result.test-run-result').delete({
-              documentId: item.documentId,
-            }),
-          ),
-      );
-    }
-
-    const syncedTestRun = await getSyncedTestRun(testRunDocumentId);
+    const syncedTestRun = await syncBatchTestRunResults(userId, payload);
     ctx.body = { data: syncedTestRun };
   },
 }));

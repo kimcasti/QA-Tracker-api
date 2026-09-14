@@ -118,6 +118,25 @@ function requireProjectId(data: Record<string, any>) {
 }
 
 export default {
+  async interpretExecutionEvidence(ctx) {
+    const userId = requireUserId(ctx);
+    const data = getData(ctx);
+    const projectId = requireProjectId(data);
+    if (typeof data.notes !== 'string' || !data.notes.trim() || data.notes.length > 20000) {
+      throw new errors.ValidationError('Las notas deben contener entre 1 y 20000 caracteres.');
+    }
+    if (data.context !== undefined && (typeof data.context !== 'string' || data.context.length > 4000)) {
+      throw new errors.ValidationError('El contexto admite hasta 4000 caracteres.');
+    }
+    const result = await strapi.service('api::ai.ai').interpretExecutionEvidence(userId, {
+      projectId,
+      notes: data.notes.trim(),
+      context: data.context || '',
+      hasEvidence: data.hasEvidence === true,
+    });
+    ctx.body = { data: result };
+  },
+
   async providerStatus(ctx) {
     requireUserId(ctx);
     ctx.body = {

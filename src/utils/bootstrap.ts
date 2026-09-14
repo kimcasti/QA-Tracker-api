@@ -1,6 +1,6 @@
 import type { Core } from '@strapi/strapi';
 import set from 'lodash/set';
-import { ACCESS_ROLE_SEEDS, EXPOSED_ACTIONS } from './access';
+import { ACCESS_ROLE_SEEDS, EXPOSED_ACTIONS, JIRA_ACTIONS } from './access';
 
 type SeededOrganization = {
   documentId: string;
@@ -88,6 +88,22 @@ export async function bootstrapAccessControl(strapi: Core.Strapi) {
     description: roleDetail.description,
     permissions,
   });
+
+  // Restored local accounts may use a custom role instead of Authenticated.
+  // Only grant the connector actions; project membership and account ownership
+  // remain mandatory in each Jira controller (including with writes enabled).
+  const jiraUserId = Number(process.env.JIRA_QA_USER_ID);
+  if (Number.isSafeInteger(jiraUserId) && jiraUserId > 0) {
+    const jiraUser = await strapi.db.query('plugin::users-permissions.user').findOne({ where: { id: jiraUserId }, populate: ['role'] });
+    if (jiraUser?.role?.id && jiraUser.role.id !== authenticatedRole.id && jiraUser.role.type !== 'public') {
+      const jiraRole = await strapi.service('plugin::users-permissions.role').findOne(jiraUser.role.id);
+      for (const action of JIRA_ACTIONS) {
+        const [namespace, controller, actionName] = action.split('.');
+        set(jiraRole.permissions, [namespace, 'controllers', controller, actionName, 'enabled'], true);
+      }
+      await strapi.service('plugin::users-permissions.role').updateRole(jiraUser.role.id, { name: jiraRole.name, description: jiraRole.description, permissions: jiraRole.permissions });
+    }
+  }
 }
 
 export async function bootstrapInitialOrganization(

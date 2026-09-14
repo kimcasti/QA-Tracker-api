@@ -1,0 +1,13 @@
+{
+  "kind": "collectionType", "collectionName": "jira_oauth_sessions",
+  "info": { "singularName": "jira-oauth-session", "pluralName": "jira-oauth-sessions", "displayName": "Jira OAuth Session" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "userId": { "type": "integer", "required": true, "private": true },
+    "stateHash": { "type": "string", "required": true, "unique": true, "private": true },
+    "revision": { "type": "string", "private": true },
+    "state": { "type": "enumeration", "enum": ["pending", "exchanging", "ready", "used"], "required": true },
+    "encryptedGrant": { "type": "text", "private": true },
+    "expiresAt": { "type": "datetime", "required": true }
+  }
+}

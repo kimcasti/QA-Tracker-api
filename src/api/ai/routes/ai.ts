@@ -1,6 +1,15 @@
 export default {
   routes: [
     {
+      method: 'POST',
+      path: '/ai/execution-evidence/interpret',
+      handler: 'ai.interpretExecutionEvidence',
+      config: {
+        auth: {},
+        policies: ['global::has-active-membership'],
+      },
+    },
+    {
       method: 'GET',
       path: '/ai/provider-status',
       handler: 'ai.providerStatus',

@@ -430,6 +430,49 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAutomationConnectionAutomationConnection
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'automation_connections';
+  info: {
+    displayName: 'Automation Connection';
+    pluralName: 'automation-connections';
+    singularName: 'automation-connection';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    expiresAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    label: Schema.Attribute.String & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-connection.automation-connection'
+    > &
+      Schema.Attribute.Private;
+    projectId: Schema.Attribute.String;
+    projectKey: Schema.Attribute.String;
+    projectName: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    state: Schema.Attribute.Enumeration<['pending', 'active', 'revoked']> &
+      Schema.Attribute.Required;
+    tokenHash: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer & Schema.Attribute.Private;
+  };
+}
+
 export interface ApiAutomationImportHistoryAutomationImportHistory
   extends Struct.CollectionTypeSchema {
   collectionName: 'automation_import_histories';
@@ -843,6 +886,207 @@ export interface ApiFunctionalityFunctionality
     testTypes: Schema.Attribute.JSON;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiJiraAccountJiraAccount extends Struct.CollectionTypeSchema {
+  collectionName: 'jira_accounts';
+  info: {
+    displayName: 'Jira Account';
+    pluralName: 'jira-accounts';
+    singularName: 'jira-account';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    accountName: Schema.Attribute.String & Schema.Attribute.Private;
+    cloudId: Schema.Attribute.String & Schema.Attribute.Private;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    email: Schema.Attribute.String & Schema.Attribute.Private;
+    enabled: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    encryptedToken: Schema.Attribute.Text & Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::jira-account.jira-account'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    site: Schema.Attribute.String & Schema.Attribute.Private;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    validatedAt: Schema.Attribute.DateTime;
+  };
+}
+
+export interface ApiJiraConnectionJiraConnection
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'jira_connections';
+  info: {
+    displayName: 'Jira Connection';
+    pluralName: 'jira-connections';
+    singularName: 'jira-connection';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    destination: Schema.Attribute.JSON & Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::jira-connection.jira-connection'
+    > &
+      Schema.Attribute.Private;
+    organizationId: Schema.Attribute.String & Schema.Attribute.Required;
+    projectId: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer & Schema.Attribute.Required;
+  };
+}
+
+export interface ApiJiraExportJiraExport extends Struct.CollectionTypeSchema {
+  collectionName: 'jira_exports';
+  info: {
+    displayName: 'Jira Export';
+    pluralName: 'jira-exports';
+    singularName: 'jira-export';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    attachmentState: Schema.Attribute.Enumeration<
+      ['none', 'uploaded', 'failed']
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    exportKey: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    issueKey: Schema.Attribute.String;
+    issueUrl: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::jira-export.jira-export'
+    > &
+      Schema.Attribute.Private;
+    organizationId: Schema.Attribute.String & Schema.Attribute.Required;
+    projectId: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    state: Schema.Attribute.Enumeration<
+      ['processing', 'created', 'uncertain', 'rejected']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer & Schema.Attribute.Required;
+  };
+}
+
+export interface ApiJiraOauthAccountJiraOauthAccount
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'jira_oauth_accounts';
+  info: {
+    displayName: 'Jira OAuth Account';
+    pluralName: 'jira-oauth-accounts';
+    singularName: 'jira-oauth-account';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    accountName: Schema.Attribute.String;
+    cloudId: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    encryptedGrant: Schema.Attribute.Text & Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::jira-oauth-account.jira-oauth-account'
+    > &
+      Schema.Attribute.Private;
+    lockExpiresAt: Schema.Attribute.DateTime & Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    refreshLock: Schema.Attribute.String & Schema.Attribute.Private;
+    revision: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private;
+    site: Schema.Attribute.String;
+    state: Schema.Attribute.Enumeration<
+      ['legacy', 'active', 'disconnected', 'reconnect']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+  };
+}
+
+export interface ApiJiraOauthSessionJiraOauthSession
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'jira_oauth_sessions';
+  info: {
+    displayName: 'Jira OAuth Session';
+    pluralName: 'jira-oauth-sessions';
+    singularName: 'jira-oauth-session';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    encryptedGrant: Schema.Attribute.Text & Schema.Attribute.Private;
+    expiresAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::jira-oauth-session.jira-oauth-session'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    revision: Schema.Attribute.String & Schema.Attribute.Private;
+    state: Schema.Attribute.Enumeration<
+      ['pending', 'exchanging', 'ready', 'used']
+    > &
+      Schema.Attribute.Required;
+    stateHash: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userId: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
       Schema.Attribute.Private;
   };
 }
@@ -2697,6 +2941,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::automation-connection.automation-connection': ApiAutomationConnectionAutomationConnection;
       'api::automation-import-history.automation-import-history': ApiAutomationImportHistoryAutomationImportHistory;
       'api::billing-request.billing-request': ApiBillingRequestBillingRequest;
       'api::bug.bug': ApiBugBug;
@@ -2704,6 +2949,11 @@ declare module '@strapi/strapi' {
       'api::delivery-unit.delivery-unit': ApiDeliveryUnitDeliveryUnit;
       'api::external-participant.external-participant': ApiExternalParticipantExternalParticipant;
       'api::functionality.functionality': ApiFunctionalityFunctionality;
+      'api::jira-account.jira-account': ApiJiraAccountJiraAccount;
+      'api::jira-connection.jira-connection': ApiJiraConnectionJiraConnection;
+      'api::jira-export.jira-export': ApiJiraExportJiraExport;
+      'api::jira-oauth-account.jira-oauth-account': ApiJiraOauthAccountJiraOauthAccount;
+      'api::jira-oauth-session.jira-oauth-session': ApiJiraOauthSessionJiraOauthSession;
       'api::meeting-note.meeting-note': ApiMeetingNoteMeetingNote;
       'api::organization-invitation.organization-invitation': ApiOrganizationInvitationOrganizationInvitation;
       'api::organization-membership.organization-membership': ApiOrganizationMembershipOrganizationMembership;
