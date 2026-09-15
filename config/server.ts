@@ -12,7 +12,10 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Server =>
     tasks: {
       'jira-personal-data-report': {
         task: async ({ strapi }) => {
-          await runJiraPersonalDataReport({ strapi });
+          const summary = await runJiraPersonalDataReport({ strapi });
+          strapi.log.info(
+            `Jira privacy report completed: reported=${summary.reported}, refreshed=${summary.refreshed}, disconnected=${summary.disconnected}.`,
+          );
         },
         // Run daily away from the top of the hour; each account is only reported when due.
         options: { rule: '17 3 * * *', tz: 'UTC' },
