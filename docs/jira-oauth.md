@@ -40,6 +40,19 @@ Reinicia la API una sola vez. Si el puerto 1337 está ocupado, revisa la API exi
 
 En producción usa la URL HTTPS real del frontend terminada en `/settings/integrations/jira/callback`, idéntica a la registrada en Atlassian. Despliega API y frontend juntos y usa credenciales de aplicación acordes a ese entorno. No uses variables `VITE_` para el Client secret o las claves de cifrado.
 
+### Informes de datos personales de Atlassian
+
+QA Tracker almacena el `accountId`, el nombre de cuenta y las credenciales OAuth cifradas para cada conexión Jira. Antes de habilitar **Distribution / Sharing** en Atlassian, configura en el backend:
+
+```env
+JIRA_PRIVACY_REPORTING_ENABLED=true
+JIRA_PRIVACY_REPORTER_USER_ID=123
+```
+
+`JIRA_PRIVACY_REPORTER_USER_ID` es el ID interno de QA Tracker de la persona propietaria de la aplicación OAuth. Esa persona debe conectar Jira exitosamente desde QA Tracker antes de activar el cron. El proceso se ejecuta diariamente a las 03:17 UTC, pero cada cuenta se informa solo cuando corresponde: Atlassian define el ciclo, con siete días como valor predeterminado. Los informes se envían en lotes de hasta 90 cuentas; una respuesta `closed` desconecta y elimina las credenciales y datos personales de esa cuenta, y una respuesta `updated` refresca su perfil.
+
+Mantén `JIRA_PRIVACY_REPORTING_ENABLED=false` en local y en cualquier entorno donde la aplicación OAuth no esté configurada. No confirmes la declaración de Atlassian hasta desplegar esta configuración y verificar una ejecución controlada.
+
 ## 3. Primera prueba, sin crear tickets
 
 1. Abre QA Tracker local en `http://localhost:3000` e inicia sesión.

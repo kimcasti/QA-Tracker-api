@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { startOAuth, completeOAuth, selectOAuthSite, resolveOAuthCredentials, disconnectOAuth, oauthStatus, oauthConfig, oauthAccountUid, oauthSessionUid, jiraScopes } from './jira-oauth';
 import { decryptToken, encryptToken } from './jira-crypto';
 import { jiraClient } from './jira';
+import { runJiraPersonalDataReport } from './jira-personal-data-report';
 
 const settings = { NODE_ENV: 'test', JIRA_OAUTH_CLIENT_ID: 'test-client', JIRA_OAUTH_CLIENT_SECRET: 'test-client-secret', JIRA_OAUTH_REDIRECT_URI: 'http://localhost:3000/settings/integrations/jira/callback', JIRA_CREDENTIALS_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64') };
 const sites = [{ id: 'cloud-1', name: 'Test Jira', url: 'https://example.atlassian.net', scopes: jiraScopes }];
@@ -25,6 +26,7 @@ async function fixture(run: (context: { tables: Map<string, any[]>; calls: strin
     transaction: async run => { const snapshot = structuredClone(tables); try { return await run(); } catch (error) { tables.clear(); for (const [key, rows] of snapshot) tables.set(key, rows); throw error; } },
     query: uid => ({
       findOne: async ({ where }) => structuredClone(tables.get(uid)!.find(row => matches(row, where)) || null),
+      findMany: async ({ where } = {}) => structuredClone(tables.get(uid)!.filter(row => matches(row, where))),
       create: async ({ data }) => { const row = { id: ++sequence, ...data }; tables.get(uid)!.push(row); return structuredClone(row); },
       update: async ({ where, data }) => { const row = tables.get(uid)!.find(row => matches(row, where)); Object.assign(row, data); return structuredClone(row); },
       updateMany: async ({ where, data }) => { const rows = tables.get(uid)!.filter(row => matches(row, where)); rows.forEach(row => Object.assign(row, data)); return { count: rows.length }; },
@@ -122,4 +124,60 @@ test('revoked access and uncertain refresh require reconnection without replayin
   setFetch((async () => { throw new Error('private upstream details'); }) as typeof fetch);
   await assert.rejects(resolveOAuthCredentials(2), /Reconecta/);
   assert.equal(current.state, 'reconnect'); assert.equal(current.encryptedGrant, null);
+}));
+
+test('privacy reporting erases a closed Jira account and its credentials', async () => fixture(async ({ tables, setFetch }) => {
+  Object.assign(process.env, {
+    JIRA_PRIVACY_REPORTING_ENABLED: 'true',
+    JIRA_PRIVACY_REPORTER_USER_ID: '2',
+  });
+  await connected();
+  const account = tables.get(oauthAccountUid)![0];
+  setFetch((async (url, options) => {
+    assert.equal(String(url), 'https://api.atlassian.com/app/report-accounts/');
+    assert.equal((options.headers as Record<string, string>).Authorization, 'Bearer access-secret-1');
+    const payload = JSON.parse(String(options.body));
+    assert.equal(payload.accounts[0].accountId, 'account-1');
+    return Response.json(
+      { accounts: [{ accountId: 'account-1', status: 'closed' }] },
+      { headers: { 'Cycle-Period': 'P7D' } },
+    );
+  }) as typeof fetch);
+
+  const summary = await runJiraPersonalDataReport({ strapi: (globalThis as any).strapi });
+
+  assert.deepEqual(summary, { enabled: true, reported: 0, disconnected: 1, refreshed: 0 });
+  assert.equal(account.state, 'disconnected');
+  assert.equal(account.encryptedGrant, null);
+  assert.equal(account.accountId, null);
+  assert.equal(account.accountName, null);
+}));
+
+test('privacy reporting refreshes updated Jira profile data and observes the report cycle', async () => fixture(async ({ tables, setFetch }) => {
+  Object.assign(process.env, {
+    JIRA_PRIVACY_REPORTING_ENABLED: 'true',
+    JIRA_PRIVACY_REPORTER_USER_ID: '2',
+  });
+  await connected();
+  const account = tables.get(oauthAccountUid)![0];
+  setFetch((async (url, options) => {
+    if (String(url) === 'https://api.atlassian.com/app/report-accounts/') {
+      assert.equal((options.headers as Record<string, string>).Authorization, 'Bearer access-secret-1');
+      return Response.json(
+        { accounts: [{ accountId: 'account-1', status: 'updated' }] },
+        { headers: { 'Cycle-Period': 'P7D' } },
+      );
+    }
+    if (String(url).endsWith('/myself')) {
+      return Response.json({ accountId: 'account-1', displayName: 'Updated User', active: true });
+    }
+    assert.fail(`Unexpected external call: ${String(url)}`);
+  }) as typeof fetch);
+  const now = new Date('2026-09-15T12:00:00.000Z');
+
+  const summary = await runJiraPersonalDataReport({ strapi: (globalThis as any).strapi, now });
+
+  assert.deepEqual(summary, { enabled: true, reported: 1, disconnected: 0, refreshed: 1 });
+  assert.equal(account.accountName, 'Updated User');
+  assert.equal(account.privacyReportDueAt, '2026-09-22T12:00:00.000Z');
 }));

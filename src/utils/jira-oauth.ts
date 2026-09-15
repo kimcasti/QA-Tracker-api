@@ -57,7 +57,7 @@ async function accessibleSites(token: string): Promise<Site[]> {
   return sites;
 }
 const credentials = (row: any, grant: Grant): JiraCredentials => ({ site: row.site, apiBase: `https://api.atlassian.com/ex/jira/${row.cloudId}`, email: '', token: grant.accessToken, userId: row.userId, authType: 'bearer',
-  onUnauthorized: row.id ? async () => { await accounts().updateMany({ where: { id: row.id, revision: row.revision, encryptedGrant: row.encryptedGrant, state: 'active' }, data: { state: 'reconnect', encryptedGrant: null } }); } : undefined });
+  onUnauthorized: row.id ? async () => { await accounts().updateMany({ where: { id: row.id, revision: row.revision, encryptedGrant: row.encryptedGrant, state: 'active' }, data: { state: 'reconnect', encryptedGrant: null, accountId: null, accountName: null, personalDataUpdatedAt: null, privacyReportDueAt: null } }); } : undefined });
 
 export async function startOAuth(userId: number) {
   const config = oauthConfig();
@@ -116,7 +116,8 @@ export async function selectOAuthSite(userId: number, selectionId: number, cloud
   await strapi.db.transaction(async () => {
     const claimed = await sessions().updateMany({ where: { id: session.id, userId, state: 'ready' }, data: { state: 'used', encryptedGrant: null } });
     if (claimed.count !== 1) throw new errors.ValidationError('Esta selección ya se utilizó.');
-    const updated = await accounts().updateMany({ where: { userId, revision: session.revision }, data: { state: 'active', revision: randomUUID(), encryptedGrant: seal(grant, userId), site: site.url, cloudId, accountName: String(user.displayName || site.name).slice(0, 255), refreshLock: null, lockExpiresAt: null } });
+    const personalDataUpdatedAt = new Date().toISOString();
+    const updated = await accounts().updateMany({ where: { userId, revision: session.revision }, data: { state: 'active', revision: randomUUID(), encryptedGrant: seal(grant, userId), site: site.url, cloudId, accountId: String(user.accountId), accountName: String(user.displayName || site.name).slice(0, 255), personalDataUpdatedAt, privacyReportDueAt: null, refreshLock: null, lockExpiresAt: null } });
     if (updated.count !== 1) throw new errors.ValidationError('La conexión cambió mientras autorizabas. Vuelve a conectar.');
     await strapi.db.query('api::jira-account.jira-account' as any).updateMany({ where: { userId }, data: { enabled: false, encryptedToken: null } });
   });
@@ -124,7 +125,7 @@ export async function selectOAuthSite(userId: number, selectionId: number, cloud
 }
 
 export async function disconnectOAuth(userId: number) {
-  const data = { state: 'disconnected', revision: randomUUID(), encryptedGrant: null, site: null, cloudId: null, accountName: null, refreshLock: null, lockExpiresAt: null };
+  const data = { state: 'disconnected', revision: randomUUID(), encryptedGrant: null, site: null, cloudId: null, accountId: null, accountName: null, personalDataUpdatedAt: null, privacyReportDueAt: null, refreshLock: null, lockExpiresAt: null };
   await strapi.db.transaction(async () => {
     const row = await accounts().findOne({ where: { userId } });
     if (row) await accounts().update({ where: { id: row.id, userId }, data });
@@ -136,6 +137,26 @@ export async function disconnectOAuth(userId: number) {
 export async function oauthStatus(userId: number) {
   const row = await accounts().findOne({ where: { userId } });
   return { configured: oauthAvailable(), state: row?.state || null, connected: row?.state === 'active', reconnect: row?.state === 'reconnect', site: row?.site || null, accountName: row?.accountName || null, pending: await pendingSites(userId) };
+}
+
+export async function refreshOAuthProfile(userId: number) {
+  const currentCredentials = await resolveOAuthCredentials(userId);
+  if (!currentCredentials) return null;
+  const user = await jiraClient(currentCredentials)('/rest/api/3/myself');
+  if (!user.accountId || user.active === false) {
+    await disconnectOAuth(userId);
+    return null;
+  }
+  const personalDataUpdatedAt = new Date().toISOString();
+  await accounts().updateMany({
+    where: { userId, state: 'active' },
+    data: {
+      accountId: String(user.accountId),
+      accountName: String(user.displayName || '').slice(0, 255) || null,
+      personalDataUpdatedAt,
+    },
+  });
+  return { accountId: String(user.accountId), personalDataUpdatedAt };
 }
 
 // undefined allows the legacy connection; null is an explicit disconnection.
@@ -152,7 +173,7 @@ export async function resolveOAuthCredentials(userId: number): Promise<JiraCrede
   const acquired = await accounts().updateMany({ where: { id: row.id, revision: row.revision, state: 'active', refreshLock: { $null: true } }, data: { refreshLock: lock, lockExpiresAt: new Date(Date.now() + 45000).toISOString() } });
   if (acquired.count !== 1) {
     if (row.refreshLock && new Date(row.lockExpiresAt).getTime() < Date.now()) {
-      await accounts().updateMany({ where: { id: row.id, revision: row.revision, refreshLock: row.refreshLock }, data: { state: 'reconnect', encryptedGrant: null, refreshLock: null } });
+      await accounts().updateMany({ where: { id: row.id, revision: row.revision, refreshLock: row.refreshLock }, data: { state: 'reconnect', encryptedGrant: null, accountId: null, accountName: null, personalDataUpdatedAt: null, privacyReportDueAt: null, refreshLock: null } });
       throw reconnect();
     }
     throw new errors.ApplicationError('La conexión Jira se está renovando. Reintenta en unos segundos.');
@@ -165,7 +186,7 @@ export async function resolveOAuthCredentials(userId: number): Promise<JiraCrede
     if (saved.count !== 1) throw reconnect();
     return credentials({ ...row, encryptedGrant }, next);
   } catch {
-    await accounts().updateMany({ where: { id: row.id, revision: row.revision, refreshLock: lock }, data: { state: 'reconnect', encryptedGrant: null, refreshLock: null } });
+    await accounts().updateMany({ where: { id: row.id, revision: row.revision, refreshLock: lock }, data: { state: 'reconnect', encryptedGrant: null, accountId: null, accountName: null, personalDataUpdatedAt: null, privacyReportDueAt: null, refreshLock: null } });
     throw reconnect();
   }
 }

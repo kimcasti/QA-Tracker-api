@@ -8,6 +8,9 @@
     "revision": { "type": "string", "required": true, "private": true },
     "encryptedGrant": { "type": "text", "private": true },
     "site": { "type": "string" }, "cloudId": { "type": "string" }, "accountName": { "type": "string" },
+    "accountId": { "type": "string", "private": true },
+    "personalDataUpdatedAt": { "type": "datetime", "private": true },
+    "privacyReportDueAt": { "type": "datetime", "private": true },
     "refreshLock": { "type": "string", "private": true }, "lockExpiresAt": { "type": "datetime", "private": true }
   }
 }

@@ -1016,6 +1016,7 @@ export interface ApiJiraOauthAccountJiraOauthAccount
     draftAndPublish: false;
   };
   attributes: {
+    accountId: Schema.Attribute.String & Schema.Attribute.Private;
     accountName: Schema.Attribute.String;
     cloudId: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
@@ -1029,6 +1030,8 @@ export interface ApiJiraOauthAccountJiraOauthAccount
     > &
       Schema.Attribute.Private;
     lockExpiresAt: Schema.Attribute.DateTime & Schema.Attribute.Private;
+    personalDataUpdatedAt: Schema.Attribute.DateTime & Schema.Attribute.Private;
+    privacyReportDueAt: Schema.Attribute.DateTime & Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
     refreshLock: Schema.Attribute.String & Schema.Attribute.Private;
     revision: Schema.Attribute.String &
