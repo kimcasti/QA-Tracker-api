@@ -10,6 +10,7 @@
     "dev": "strapi develop",
     "develop": "strapi develop",
     "import:legacy": "node --import tsx ./src/scripts/import-legacy.ts",
+    "jira:privacy-report": "node --import tsx ./src/scripts/run-jira-privacy-report.ts",
     "start": "strapi start",
     "strapi": "strapi",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",

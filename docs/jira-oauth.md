@@ -53,6 +53,14 @@ JIRA_PRIVACY_REPORTER_USER_ID=123
 
 Mantén `JIRA_PRIVACY_REPORTING_ENABLED=false` en local y en cualquier entorno donde la aplicación OAuth no esté configurada. No confirmes la declaración de Atlassian hasta desplegar esta configuración y verificar una ejecución controlada.
 
+Para una verificación inmediata en Railway, con el reporte ya habilitado, abre la consola del servicio API y ejecuta:
+
+```bash
+npm run jira:privacy-report
+```
+
+El comando usa la misma rutina del cron una sola vez, escribe un resumen sin identificadores personales y se cierra. No expone un endpoint HTTP adicional.
+
 ## 3. Primera prueba, sin crear tickets
 
 1. Abre QA Tracker local en `http://localhost:3000` e inicia sesión.
