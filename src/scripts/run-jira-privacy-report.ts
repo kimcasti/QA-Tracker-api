@@ -1,4 +1,4 @@
-import { compileStrapi, createStrapi } from '@strapi/strapi';
+import { createStrapi } from '@strapi/strapi';
 import { runJiraPersonalDataReport } from '../utils/jira-personal-data-report';
 
 async function main() {
@@ -6,8 +6,11 @@ async function main() {
     throw new Error('Set JIRA_PRIVACY_REPORTING_ENABLED=true before running this command.');
   }
 
-  const appContext = await compileStrapi();
-  const strapi = await createStrapi(appContext).load();
+  // Match `strapi start`: load the already-built application without binding an HTTP server.
+  const strapi = await createStrapi({
+    appDir: process.cwd(),
+    distDir: 'dist',
+  }).load();
 
   try {
     const summary = await runJiraPersonalDataReport({ strapi });
@@ -20,6 +23,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(error);
   process.exitCode = 1;
 });
