@@ -122,6 +122,7 @@ function buildTestRunData(payload: TestRunPayload, sprintDocumentId?: string | n
 
 const summaryFields = [
   'documentId',
+  'createdAt',
   'title',
   'description',
   'executionDate',
