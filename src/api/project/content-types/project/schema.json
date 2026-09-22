@@ -137,6 +137,12 @@
       "target": "api::meeting-note.meeting-note",
       "mappedBy": "project"
     },
+    "projectComments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project-comment.project-comment",
+      "mappedBy": "project"
+    },
     "testCycles": {
       "type": "relation",
       "relation": "oneToMany",
