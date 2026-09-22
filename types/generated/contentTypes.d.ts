@@ -1435,6 +1435,48 @@ export interface ApiPersonalNotePersonalNote
   };
 }
 
+export interface ApiProjectCommentProjectComment
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'project_comments';
+  info: {
+    displayName: 'Project Comment';
+    pluralName: 'project-comments';
+    singularName: 'project-comment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    author: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    content: Schema.Attribute.Text & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isPinned: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-comment.project-comment'
+    > &
+      Schema.Attribute.Private;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    > &
+      Schema.Attribute.Required;
+    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiProjectModuleProjectModule
   extends Struct.CollectionTypeSchema {
   collectionName: 'project_modules';
@@ -1671,6 +1713,10 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     personaRoles: Schema.Attribute.Relation<
       'oneToMany',
       'api::project-persona-role.project-persona-role'
+    >;
+    projectComments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::project-comment.project-comment'
     >;
     projectStartAt: Schema.Attribute.Date;
     proposalNumber: Schema.Attribute.String;
@@ -2964,6 +3010,7 @@ declare module '@strapi/strapi' {
       'api::organization-usage.organization-usage': ApiOrganizationUsageOrganizationUsage;
       'api::organization.organization': ApiOrganizationOrganization;
       'api::personal-note.personal-note': ApiPersonalNotePersonalNote;
+      'api::project-comment.project-comment': ApiProjectCommentProjectComment;
       'api::project-module.project-module': ApiProjectModuleProjectModule;
       'api::project-persona-role.project-persona-role': ApiProjectPersonaRoleProjectPersonaRole;
       'api::project-proposal.project-proposal': ApiProjectProposalProjectProposal;

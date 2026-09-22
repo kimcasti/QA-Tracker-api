@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_comments",
+  "info": {
+    "singularName": "project-comment",
+    "pluralName": "project-comments",
+    "displayName": "Project Comment"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "content": {
+      "type": "text",
+      "required": true
+    },
+    "isPinned": {
+      "type": "boolean",
+      "default": false
+    },
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "required": true
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "projectComments",
+      "required": true
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    }
+  }
+}

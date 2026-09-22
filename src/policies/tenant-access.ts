@@ -34,6 +34,7 @@ const PROJECT_SCOPED_CONTENT_TYPES = new Set([
   'api::test-plan.test-plan',
   'api::bug.bug',
   'api::meeting-note.meeting-note',
+  'api::project-comment.project-comment',
   'api::delivery-unit.delivery-unit',
   'api::delivery-activity-template.delivery-activity-template',
   'api::external-participant.external-participant',
