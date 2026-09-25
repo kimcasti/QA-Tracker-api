@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "automation_runners",
+  "info": {
+    "singularName": "automation-runner",
+    "pluralName": "automation-runners",
+    "displayName": "automation-runner"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": false
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "connectionId": {
+      "type": "integer",
+      "required": true,
+      "unique": true,
+      "private": true
+    },
+    "projectId": {
+      "type": "string",
+      "required": true
+    },
+    "label": {
+      "type": "string",
+      "required": true
+    },
+    "sessionHash": {
+      "type": "string",
+      "private": true,
+      "required": true
+    },
+    "lastSeenAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "catalog": {
+      "type": "json",
+      "required": true
+    },
+    "catalogHash": {
+      "type": "string",
+      "required": true
+    }
+  }
+}

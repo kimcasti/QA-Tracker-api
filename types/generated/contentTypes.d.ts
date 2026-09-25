@@ -525,6 +525,118 @@ export interface ApiAutomationImportHistoryAutomationImportHistory
   };
 }
 
+export interface ApiAutomationJobAutomationJob
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'automation_jobs';
+  info: {
+    displayName: 'automation-job';
+    pluralName: 'automation-jobs';
+    singularName: 'automation-job';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    'content-manager': {
+      visible: false;
+    };
+    'content-type-builder': {
+      visible: false;
+    };
+  };
+  attributes: {
+    activeRun: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    activeRunner: Schema.Attribute.Integer &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    cases: Schema.Attribute.JSON & Schema.Attribute.Required;
+    catalogHash: Schema.Attribute.String & Schema.Attribute.Required;
+    completedCount: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    finishedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-job.automation-job'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Text;
+    outcomes: Schema.Attribute.JSON;
+    projectId: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    receiptHash: Schema.Attribute.String & Schema.Attribute.Private;
+    requestedBy: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private;
+    requestKey: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    runId: Schema.Attribute.String & Schema.Attribute.Required;
+    runnerId: Schema.Attribute.Integer & Schema.Attribute.Required;
+    startedAt: Schema.Attribute.DateTime;
+    state: Schema.Attribute.Enumeration<
+      ['pending', 'running', 'completed', 'interrupted']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAutomationRunnerAutomationRunner
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'automation_runners';
+  info: {
+    displayName: 'automation-runner';
+    pluralName: 'automation-runners';
+    singularName: 'automation-runner';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    'content-manager': {
+      visible: false;
+    };
+    'content-type-builder': {
+      visible: false;
+    };
+  };
+  attributes: {
+    catalog: Schema.Attribute.JSON & Schema.Attribute.Required;
+    catalogHash: Schema.Attribute.String & Schema.Attribute.Required;
+    connectionId: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    label: Schema.Attribute.String & Schema.Attribute.Required;
+    lastSeenAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-runner.automation-runner'
+    > &
+      Schema.Attribute.Private;
+    projectId: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    sessionHash: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiBillingRequestBillingRequest
   extends Struct.CollectionTypeSchema {
   collectionName: 'billing_requests';
@@ -2992,6 +3104,8 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::automation-connection.automation-connection': ApiAutomationConnectionAutomationConnection;
       'api::automation-import-history.automation-import-history': ApiAutomationImportHistoryAutomationImportHistory;
+      'api::automation-job.automation-job': ApiAutomationJobAutomationJob;
+      'api::automation-runner.automation-runner': ApiAutomationRunnerAutomationRunner;
       'api::billing-request.billing-request': ApiBillingRequestBillingRequest;
       'api::bug.bug': ApiBugBug;
       'api::delivery-activity-template.delivery-activity-template': ApiDeliveryActivityTemplateDeliveryActivityTemplate;
