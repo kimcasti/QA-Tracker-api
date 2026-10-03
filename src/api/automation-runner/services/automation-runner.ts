@@ -154,8 +154,17 @@ export default {
       const busy = await db(JOB).findOne({ where: { activeRunner: runner.id } });
       visible.push({ id: runner.id, label: runner.label, online: Boolean(connected && online(runner)), busy: Boolean(busy), catalog: runner.catalog });
     }
+    const connections = await db(CONNECTION).findMany({ where: {
+      projectId: run.project.documentId, state: 'active', expiresAt: { $gt: now() },
+    }, orderBy: { id: 'asc' } });
+    const availableConnections = connections.map((connection: any) => {
+      const registered = runners.find((runner: any) => runner.connectionId === connection.id);
+      const runner = visible.find(item => item.id === registered?.id);
+      return { id: connection.id, label: connection.label, isOwnConnection: connection.userId === ctx.state.user.id,
+        runnerId: runner?.id ?? null, online: runner?.online ?? false, busy: runner?.busy ?? false };
+    });
     const allCases = await projectCases(run.project.documentId);
-    return { runners: visible, cases: eligible(run, null, allCases).map(({ problem, ...item }: any) => item),
+    return { runners: visible, connections: availableConnections, cases: eligible(run, null, allCases).map(({ problem, ...item }: any) => item),
       duplicateReferences: allCases.map(c => c.automationReference).filter((ref, index, all) => all.indexOf(ref) !== index),
       jobs: (await db(JOB).findMany({ where: { runId: run.documentId, projectId: run.project.documentId }, orderBy: { id: 'desc' }, limit: 20 }))
         .map(job => ({ ...publicJob(job), outcomes: undefined })),

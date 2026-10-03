@@ -11,6 +11,10 @@ Los tipos son internos, sin rutas CRUD públicas.
 El ejecutor usa el bearer `qat_...` de la conexión existente. La política
 `automation-token` comprueba caducidad, revocación, usuario activo y permisos actuales del proyecto.
 La sesión efímera enviada por el proceso se guarda como hash y evita dos procesos simultáneos en la misma carpeta.
+El selector muestra todas las conexiones activas y vigentes del proyecto, incluidas las de otros integrantes.
+Las conexiones del usuario actual se marcan como «Tu conexión». Una conexión sin ejecutor registrado
+o sin latidos aparece como «Ejecutor desconectado» y no puede recibir trabajos hasta iniciar `npm run qa:runner`.
+Cada conexión independiente puede registrar su propio ejecutor en el mismo proyecto.
 Los endpoints de interfaz usan `automation-session` más validación de rol de ingeniería, organización y acceso al proyecto de la ejecución.
 
 ## Endpoints

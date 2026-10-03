@@ -156,6 +156,36 @@ test('registration rejects a second live process and results are bound to the ru
   await assert.rejects(service.poll(f.ctx({ session: 'wrong' })), /inválida/);
 });
 
+test('inspection lists project connections without runners and keeps independent live runners selectable', async () => {
+  const f = fixture();
+  f.state().connections[0].userId = 2;
+  f.state().connections.push(
+    { id: 2, userId: 1, projectId: 'project', label: 'Mi equipo', state: 'active', expiresAt: '2099-01-01' },
+    { id: 3, userId: 1, projectId: 'other', label: 'Otro proyecto', state: 'active', expiresAt: '2099-01-01' },
+    { id: 4, userId: 1, projectId: 'project', label: 'Revocada', state: 'revoked', expiresAt: '2099-01-01' },
+    { id: 5, userId: 1, projectId: 'project', label: 'Vencida', state: 'active', expiresAt: '2000-01-01' },
+  );
+  await f.register();
+  const first = await service.inspect(f.ctx());
+  assert.deepEqual(first.connections, [
+    { id: 1, label: 'Equipo', isOwnConnection: false, runnerId: 1, online: true, busy: false },
+    { id: 2, label: 'Mi equipo', isOwnConnection: true, runnerId: null, online: false, busy: false },
+  ]);
+  const context = f.ctx({ session: 'my-session', catalog: refs });
+  context.state.automationConnection = f.state().connections[1];
+  await service.register(context);
+  const inspection = await service.inspect(f.ctx());
+  assert.equal(inspection.connections.length, 2);
+  assert.ok(inspection.connections.every(connection => connection.online && !connection.busy));
+  const job = await f.enqueue({ runnerId: inspection.connections[1].runnerId });
+  assert.equal(job.runnerId, 2);
+  f.state().runners[1].lastSeenAt = '2000-01-01';
+  const offline = await service.inspect(f.ctx());
+  assert.equal(offline.connections[1].online, false);
+  assert.equal(offline.connections[1].runnerId, 2);
+  assert.equal(offline.connections[0].online, true);
+});
+
 test('publication rolls back all writes if a selected row disappeared; arbitrary commands are rejected', async () => {
   const f = fixture(); await f.register();
   await assert.rejects(f.enqueue({ command: 'echo unexpected' }), /comandos/);
