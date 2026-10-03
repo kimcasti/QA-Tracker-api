@@ -23,12 +23,12 @@ Todos los cuerpos POST usan `{ "data": { ... } }`; las respuestas usan `{ "data"
 
 | Método/ruta | Autorización | Datos |
 | --- | --- | --- |
-| POST /api/automation-runner/register | Conexión | session, catalog: referencias exactas |
+| POST /api/automation-runner/register | Conexión | session, catalog: referencias exactas, environments: local/test configurados |
 | POST /api/automation-runner/poll | Conexión | session, claim: boolean, jobId opcional, completedCount opcional |
 | POST /api/automation-runner/interrupt | Conexión | session, jobId |
 | POST /api/automation-runner/complete | Conexión | session, jobId, results |
 | GET /api/automation-runs/:runId/runner | Sesión web | Disponibilidad, casos, problemas de catálogo e historial sin imágenes |
-| POST /api/automation-runs/:runId/jobs | Sesión web | runnerId, caseIds, requestId único del intento |
+| POST /api/automation-runs/:runId/jobs | Sesión web | runnerId, caseIds, environment: local/test, requestId único del intento |
 | GET /api/automation-runs/:runId/jobs/:jobId | Sesión web | Detalle y evidencias, cargados bajo demanda |
 
 Cada resultado contiene `automationReference`, `status` (passed/failed/skipped/unknown),
@@ -51,6 +51,38 @@ Las referencias se comparan exactamente, sin convertirlas a minúsculas.
 
 Mantener el campo `automationReference` único entre los casos Playwright automatizados del proyecto.
 Al crear una ejecución, sus casos deben estar guardados como filas de resultados.
+
+## Ambiente por trabajo
+
+El diálogo «Ejecutar automatizados» permite elegir Local o Test. El ambiente se guarda
+en cada trabajo y aparece en el historial y en la respuesta de `poll`, independientemente
+del ambiente definido en la ejecución manual. Un reenvío con el mismo `requestId` y otro
+ambiente se rechaza, para evitar ejecutar dos destinos bajo el mismo intento.
+
+Configurar las URLs de la aplicación probada en `qa-automation/.env`:
+
+```dotenv
+PLAYWRIGHT_LOCAL_BASE_URL=http://localhost:3000
+PLAYWRIGHT_TEST_BASE_URL=https://tu-aplicacion-test.example.com
+```
+
+Actualizar cada carpeta existente desde la raíz de QA Tracker:
+
+```bash
+node scripts/update-automation-runner.mjs "/ruta/al/proyecto/qa-automation"
+```
+
+El actualizador conserva un respaldo `qa-runner.mjs.before-environments.bak`, mantiene
+la recuperación/publicación existente y agrega `runner-environment.mjs`. Reiniciar
+`npm run qa:runner` después de actualizar o cambiar las URLs. Publicar frontend y API
+juntos; Strapi agrega `automation_jobs.environment` y `automation_runners.environments`
+al iniciar. Las conexiones antiguas admiten solamente Local hasta actualizar su ejecutor.
+
+El ejecutor anuncia únicamente los ambientes que tienen URL configurada y valida otra vez
+el ambiente al recibir el trabajo. La selección se aplica al descubrimiento, verificación
+y ejecución de Playwright. Las URLs específicas tienen prioridad sobre `PLAYWRIGHT_BASE_URL`;
+este override general sirve únicamente para el ambiente de inicio (`PLAYWRIGHT_ENV`, Local
+por defecto). Nunca se usa como fallback de otro ambiente.
 
 ## Verificación
 

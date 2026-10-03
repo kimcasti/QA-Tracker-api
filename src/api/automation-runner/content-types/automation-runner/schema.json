@@ -18,6 +18,9 @@
     }
   },
   "attributes": {
+    "environments": {
+      "type": "json"
+    },
     "connectionId": {
       "type": "integer",
       "required": true,

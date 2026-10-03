@@ -63,6 +63,11 @@ function fixture() {
             if (orderBy?.id === 'desc') rows.reverse();
             return rows.slice(0, limit || rows.length);
           },
+          findWithCount: async ({ where, orderBy, limit }: any) => {
+            const rows = store[key].filter((r: any) => matches(r, where));
+            if (orderBy?.id === 'desc') rows.reverse();
+            return [rows.slice(0, limit || rows.length), rows.length];
+          },
           create: async ({ data }: any) => {
             for (const field of key === 'jobs' ? ['activeRun', 'activeRunner', 'requestKey'] : ['connectionId']) {
               if (data[field] != null && store[key].some((r: any) => r[field] === data[field])) throw new Error('Unique violation');
@@ -104,6 +109,22 @@ function fixture() {
   };
   return { ctx, register, enqueue, state: () => store };
 }
+
+test('inspection counts only jobs for the current run and project beyond the history limit', async () => {
+  const f = fixture();
+  f.state().jobs = Array.from({ length: 25 }, (_, index) => ({
+    id: 100 + index * 3, runId: 'run', projectId: 'project', state: 'completed', cases: [],
+  }));
+  f.state().jobs.push(
+    { id: 200, runId: 'other-run', projectId: 'project', state: 'completed', cases: [] },
+    { id: 201, runId: 'run', projectId: 'other-project', state: 'completed', cases: [] },
+  );
+  const inspection = await service.inspect(f.ctx());
+  assert.equal(inspection.totalJobs, 25);
+  assert.equal(inspection.jobs.length, 20);
+  assert.equal(inspection.jobs[0].id, 172);
+  assert.equal(inspection.jobs[19].id, 115);
+});
 
 test('mixed modules, double click, atomic claim, selected-only publication and idempotent resend', async () => {
   const f = fixture(); await f.register();
@@ -203,6 +224,57 @@ test('a queued job is interrupted if its references change before claim', async 
   const f = fixture(); await f.register(); await f.enqueue();
   f.state().cases[0].automationReference = 'changed::test';
   assert.equal((await service.poll(f.ctx({ claim: true }))).claimed, false);
+  assert.equal(f.state().jobs[0].state, 'interrupted');
+  assert.equal(f.state().writes, 0);
+});
+
+test('environment defaults to local and unsupported or invalid environments cannot enqueue', async () => {
+  const f = fixture(); await f.register();
+  await assert.rejects(f.enqueue({ environment: 'test' }), /ambiente/);
+  for (const environment of ['production', '', null, { command: 'test' }]) {
+    await assert.rejects(f.enqueue({ environment }), /ambiente/);
+  }
+  assert.equal(f.state().jobs.length, 0);
+  const job = await f.enqueue();
+  assert.equal(job.environment, 'local');
+  assert.equal((await service.poll(f.ctx({ claim: true }))).job.environment, 'local');
+});
+
+test('test environment survives inspection, claim, publication and idempotent retries', async () => {
+  const f = fixture();
+  await service.register(f.ctx({ catalog: refs, environments: ['local', 'test'] }));
+  const inspection = await service.inspect(f.ctx());
+  assert.deepEqual(inspection.runners[0].environments, ['local', 'test']);
+  const job = await f.enqueue({ environment: 'test' });
+  assert.equal(job.environment, 'test');
+  assert.equal((await f.enqueue({ environment: 'test' })).id, job.id);
+  await assert.rejects(f.enqueue({ environment: 'local' }), /otra selección/);
+  assert.equal((await service.inspect(f.ctx())).jobs[0].environment, 'test');
+  assert.equal((await service.poll(f.ctx({ claim: true }))).job.environment, 'test');
+  const completed = await service.complete(f.ctx({ jobId: job.id,
+    results: refs.map(automationReference => ({ automationReference, status: 'passed' })) }));
+  assert.equal(completed.environment, 'test');
+  const details = f.ctx();
+  Object.assign(details.params, { jobId: String(job.id) });
+  assert.equal((await service.details(details)).environment, 'test');
+});
+
+test('runner registration only accepts supported unique environments', async () => {
+  const f = fixture();
+  for (const environments of [[], ['production'], ['local', 'local'], 'test']) {
+    await assert.rejects(service.register(f.ctx({ catalog: refs, environments })), /ambientes/);
+  }
+  assert.equal(f.state().runners.length, 0);
+});
+
+test('a queued Test job cannot be claimed after the runner loses Test support', async () => {
+  const f = fixture();
+  await service.register(f.ctx({ catalog: refs, environments: ['local', 'test'] }));
+  await f.enqueue({ environment: 'test' });
+  await service.register(f.ctx({ catalog: refs, environments: ['local'] }));
+  const claim = await service.poll(f.ctx({ claim: true }));
+  assert.equal(claim.claimed, false);
+  assert.equal(claim.job, null);
   assert.equal(f.state().jobs[0].state, 'interrupted');
   assert.equal(f.state().writes, 0);
 });

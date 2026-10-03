@@ -557,6 +557,8 @@ export interface ApiAutomationJobAutomationJob
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    environment: Schema.Attribute.Enumeration<['local', 'test']> &
+      Schema.Attribute.DefaultTo<'local'>;
     finishedAt: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -618,6 +620,7 @@ export interface ApiAutomationRunnerAutomationRunner
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    environments: Schema.Attribute.JSON;
     label: Schema.Attribute.String & Schema.Attribute.Required;
     lastSeenAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;

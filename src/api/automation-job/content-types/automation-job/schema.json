@@ -18,6 +18,11 @@
     }
   },
   "attributes": {
+    "environment": {
+      "type": "enumeration",
+      "enum": ["local", "test"],
+      "default": "local"
+    },
     "runnerId": {
       "type": "integer",
       "required": true

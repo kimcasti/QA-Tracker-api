@@ -10,6 +10,7 @@ const now = () => new Date().toISOString();
 const online = (r: any) => Date.now() - new Date(r.lastSeenAt).getTime() < LEASE_MS;
 const publicJob = (j: any) => j && ({
   id: j.id, runId: j.runId, runnerId: j.runnerId, state: j.state, cases: j.cases,
+  environment: j.environment || 'local',
   catalogHash: j.catalogHash, completedCount: j.completedCount, message: j.message,
   startedAt: j.startedAt, finishedAt: j.finishedAt, outcomes: j.outcomes,
 });
@@ -81,6 +82,11 @@ export default {
     const connection = ctx.state.automationConnection;
     const body = ctx.request.body?.data || {};
     const catalog = catalogInput(body.catalog);
+    const environments = body.environments ?? ['local'];
+    if (!Array.isArray(environments) || !environments.length || environments.length > 2 ||
+      new Set(environments).size !== environments.length || environments.some(value => !['local', 'test'].includes(value))) {
+      fail('Los ambientes del ejecutor deben ser local o test, sin duplicados.');
+    }
     const sessionHash = digest(requiredString(body.session, 'Sesión'));
     return strapi.db.transaction(async ({ trx }) => {
       await lock(trx, CONNECTION, connection.id);
@@ -88,7 +94,7 @@ export default {
       if (existing && online(existing) && existing.sessionHash !== sessionHash) fail('Ya hay un ejecutor activo en esta carpeta.');
       if (existing) await expire(existing);
       const data = { connectionId: connection.id, projectId: connection.projectId, label: connection.label,
-        sessionHash, lastSeenAt: now(), catalog, catalogHash: digest(catalog) };
+        sessionHash, lastSeenAt: now(), catalog, catalogHash: digest(catalog), environments };
       const runner = existing
         ? await db(RUNNER).update({ where: { id: existing.id }, data })
         : await db(RUNNER).create({ data });
@@ -111,14 +117,15 @@ export default {
         const run: any = await strapi.documents('api::test-run.test-run').findOne({
           documentId: job.runId, populate: { project: true, results: { populate: { testCase: true } } } as any,
         });
-        const valid = run?.status === 'draft' && run.project?.documentId === runner.projectId &&
+        const valid = (runner.environments || ['local']).includes(job.environment || 'local') &&
+          run?.status === 'draft' && run.project?.documentId === runner.projectId &&
           job.cases.every((selected: SelectedCase) => run.results?.some((row: any) =>
             row.documentId === selected.resultId && row.testCase?.documentId === selected.caseId &&
             row.testCase.automationReference === selected.reference && row.testCase.automationStatus === 'automated' &&
             row.testCase.automationTool === 'playwright'));
         if (!valid) {
           await db(JOB).update({ where: { id: job.id }, data: { state: 'interrupted', activeRun: null,
-            activeRunner: null, finishedAt: now(), message: 'La ejecución o sus casos cambiaron antes de iniciar.' } });
+            activeRunner: null, finishedAt: now(), message: 'La ejecución, sus casos o los ambientes del ejecutor cambiaron antes de iniciar.' } });
           return { job: null, claimed: false };
         }
         const changed = await db(JOB).updateMany({ where: { id: job.id, state: 'pending' },
@@ -152,7 +159,8 @@ export default {
         if (fresh) await expire(connected ? fresh : { ...fresh, lastSeenAt: '1970-01-01' });
       });
       const busy = await db(JOB).findOne({ where: { activeRunner: runner.id } });
-      visible.push({ id: runner.id, label: runner.label, online: Boolean(connected && online(runner)), busy: Boolean(busy), catalog: runner.catalog });
+      visible.push({ id: runner.id, label: runner.label, online: Boolean(connected && online(runner)), busy: Boolean(busy), catalog: runner.catalog,
+        environments: runner.environments || ['local'] });
     }
     const connections = await db(CONNECTION).findMany({ where: {
       projectId: run.project.documentId, state: 'active', expiresAt: { $gt: now() },
@@ -164,10 +172,11 @@ export default {
         runnerId: runner?.id ?? null, online: runner?.online ?? false, busy: runner?.busy ?? false };
     });
     const allCases = await projectCases(run.project.documentId);
+    const jobFilter = { runId: run.documentId, projectId: run.project.documentId };
+    const [jobs, totalJobs] = await db(JOB).findWithCount({ where: jobFilter, orderBy: { id: 'desc' }, limit: 20 });
     return { runners: visible, connections: availableConnections, cases: eligible(run, null, allCases).map(({ problem, ...item }: any) => item),
       duplicateReferences: allCases.map(c => c.automationReference).filter((ref, index, all) => all.indexOf(ref) !== index),
-      jobs: (await db(JOB).findMany({ where: { runId: run.documentId, projectId: run.project.documentId }, orderBy: { id: 'desc' }, limit: 20 }))
-        .map(job => ({ ...publicJob(job), outcomes: undefined })),
+      jobs: jobs.map(job => ({ ...publicJob(job), outcomes: undefined })), totalJobs,
       canRun: run.status === 'draft' };
   },
   async details(ctx: any) {
@@ -178,7 +187,9 @@ export default {
   },
   async enqueue(ctx: any) {
     const body = ctx.request.body?.data || {};
-    if (Object.keys(body).some(key => !['runnerId', 'requestId', 'caseIds'].includes(key))) fail('El trabajo no admite comandos ni opciones adicionales.');
+    if (Object.keys(body).some(key => !['runnerId', 'requestId', 'caseIds', 'environment'].includes(key))) fail('El trabajo no admite comandos ni opciones adicionales.');
+    const environment = body.environment === undefined ? 'local' : body.environment;
+    if (!['local', 'test'].includes(environment)) fail('El ambiente debe ser local o test.');
     const run = await runAccess(ctx.state.user.id, ctx.params.runId);
     const requestKey = run.documentId + ':' + requiredString(body.requestId, 'Identificador', 80);
     positiveId(body.runnerId);
@@ -193,7 +204,7 @@ export default {
       const previous = await db(JOB).findOne({ where: { requestKey } });
       if (previous) {
         const sameCases = JSON.stringify(previous.cases.map((c: SelectedCase) => c.caseId).sort()) === JSON.stringify([...body.caseIds].sort());
-        if (previous.runnerId !== runner.id || !sameCases) fail('Este identificador ya se usó con otra selección.');
+        if (previous.runnerId !== runner.id || !sameCases || (previous.environment || 'local') !== environment) fail('Este identificador ya se usó con otra selección.');
         return publicJob(previous);
       }
       const freshRun = await runAccess(ctx.state.user.id, run.documentId);
@@ -202,6 +213,7 @@ export default {
       await expire(fresh);
       const connection = await db(CONNECTION).findOne({ where: { id: runner.connectionId } });
       if (!online(fresh) || connection?.state !== 'active' || new Date(connection.expiresAt).getTime() <= Date.now()) fail('Ejecutor desconectado.');
+      if (!(fresh.environments || ['local']).includes(environment)) fail('El ejecutor no tiene disponible este ambiente. Configura su URL y reinicia el ejecutor actualizado.');
       const active = await db(JOB).findOne({ where: { $or: [{ activeRun: run.documentId }, { activeRunner: runner.id }] } });
       if (active) fail('Ya existe un trabajo activo para esta ejecución o ejecutor.');
       const candidates = eligible(freshRun, fresh, await projectCases(run.project.documentId));
@@ -213,7 +225,7 @@ export default {
       });
       return publicJob(await db(JOB).create({ data: { runnerId: runner.id, projectId: run.project.documentId,
         runId: run.documentId, requestedBy: ctx.state.user.id, requestKey, activeRun: run.documentId,
-        activeRunner: runner.id, state: 'pending', cases: selected, catalogHash: fresh.catalogHash, completedCount: 0 } }));
+        activeRunner: runner.id, state: 'pending', cases: selected, catalogHash: fresh.catalogHash, completedCount: 0, environment } }));
     });
   },
   async complete(ctx: any) {
