@@ -12,8 +12,8 @@ export function requiredString(value: unknown, name: string, max = 200): string 
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail(name + ' inválido.');
   return value as string;
 }
-export function catalogInput(value: unknown): string[] {
-  if (!Array.isArray(value) || !value.length || value.length > 5000) fail('Catálogo inválido.');
+export function catalogInput(value: unknown, allowEmpty = false): string[] {
+  if (!Array.isArray(value) || (!allowEmpty && !value.length) || value.length > 5000) fail('Catálogo inválido.');
   return (value as unknown[]).map(item => {
     const ref = requiredString(item, 'Referencia', 1000);
     if (!ref.includes('::') || /[\r\n\0]/.test(ref)) fail('Referencia inválida.');

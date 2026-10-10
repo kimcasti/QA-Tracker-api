@@ -18,6 +18,7 @@
     }
   },
   "attributes": {
+    "catalogRefreshVersion": { "type": "integer", "default": 0 },
     "environments": {
       "type": "json"
     },

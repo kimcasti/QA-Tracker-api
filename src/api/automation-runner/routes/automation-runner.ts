@@ -1,6 +1,6 @@
 export default {
   routes: [
-    ...['register', 'poll', 'interrupt', 'complete'].map(action => ({
+    ...['register', 'poll', 'interrupt', 'complete', 'completeCatalog'].map(action => ({
       method: 'POST', path: '/automation-runner/' + action, handler: 'automation-runner.' + action,
       config: { auth: false, policies: ['global::automation-token'] },
     })),

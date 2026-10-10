@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import service from './automation-runner';
 import { catalogInput, digest, referenceProblem, validateOutcomes } from './protocol';
+import catalogService from '../../automation-catalog/services/automation-catalog';
 
 const refs = ['users/list.spec.ts::buscar', 'patients/list.spec.ts::crear'];
 test('references are exact, duplicates are rejected and results cannot escape the selection', () => {
@@ -20,7 +21,7 @@ test('references are exact, duplicates are rejected and results cannot escape th
 function fixture() {
   let store: any = {
     connections: [{ id: 1, projectId: 'project', label: 'Equipo', state: 'active', expiresAt: '2099-01-01' }],
-    runners: [], jobs: [],
+    runners: [], jobs: [], catalogs: [], projects: [{ id: 4, documentId: 'project' }],
     project: { documentId: 'project', organization: { documentId: 'org' } },
     cases: refs.map((reference, i) => ({ documentId: 'c' + i, title: 'Caso ' + i, automationStatus: 'automated',
       automationTool: 'playwright', automationReference: reference, project: { documentId: 'project' } })),
@@ -36,6 +37,7 @@ function fixture() {
     if (value && typeof value === 'object') {
       if ('$in' in value) return value.$in.includes(row[key]);
       if ('$gt' in value) return row[key] > value.$gt;
+      if ('$lt' in value) return row[key] < value.$lt;
     }
     return row[key] === value;
   });
@@ -49,13 +51,15 @@ function fixture() {
         await previous;
         const snapshot = structuredClone(store);
         try {
-          const trx = () => ({ where: () => ({ forUpdate: () => ({ first: async () => ({}) }) }) });
+          const trx = () => ({ where: () => ({ forUpdate: () => ({ first: async () => ({}) }) }),
+            whereIn: () => ({ forUpdate: async () => [] }) });
           return await work({ trx });
         } catch (error) { store = snapshot; throw error; }
         finally { release(); }
       },
       query: (uid: string) => {
-        const key = uid.includes('automation-connection') ? 'connections' : uid.includes('automation-runner') ? 'runners' : 'jobs';
+        const key = uid.includes('automation-connection') ? 'connections' : uid.includes('automation-runner') ? 'runners'
+          : uid.includes('automation-catalog') ? 'catalogs' : uid.includes('api::project.') ? 'projects' : 'jobs';
         return {
           findOne: async ({ where }: any) => store[key].find((r: any) => matches(r, where)) || null,
           findMany: async ({ where, orderBy, limit }: any) => {
@@ -69,7 +73,7 @@ function fixture() {
             return [rows.slice(0, limit || rows.length), rows.length];
           },
           create: async ({ data }: any) => {
-            for (const field of key === 'jobs' ? ['activeRun', 'activeRunner', 'requestKey'] : ['connectionId']) {
+            for (const field of key === 'jobs' ? ['activeRun', 'activeRunner', 'requestKey'] : key === 'catalogs' ? ['activeRunner', 'requestKey'] : ['connectionId']) {
               if (data[field] != null && store[key].some((r: any) => r[field] === data[field])) throw new Error('Unique violation');
             }
             const row = { id: store[key].length + 1, ...data };
@@ -92,6 +96,7 @@ function fixture() {
       findMany: async () => uid.includes('membership') ? store.memberships : uid.includes('test-case') ? store.cases : [],
       update: async ({ documentId, data }: any) => {
         store.writes++;
+        if (store.failWriteAt === store.writes) throw new Error('Simulated write failure');
         const collection = uid.includes('test-run-result') ? store.results : store.cases;
         const row = collection.find((item: any) => item.documentId === documentId);
         Object.assign(row, data); return row;
@@ -109,6 +114,133 @@ function fixture() {
   };
   return { ctx, register, enqueue, state: () => store };
 }
+
+const catalogCtx = (f: ReturnType<typeof fixture>, data = {}, requestId = 1) => ({
+  ...f.ctx(), request: { body: { data } }, params: { projectKey: 'p', requestId: String(requestId) },
+});
+async function completedCatalog(f: ReturnType<typeof fixture>, references = ['new.spec.ts::iniciar sesión', 'new.spec.ts::salir']) {
+  await service.register(f.ctx({ catalog: refs, catalogRefreshVersion: 1, environments: ['local', 'test'] }));
+  const request = await catalogService.request(catalogCtx(f, { runnerId: 1, requestId: 'catalog', environment: 'test' }));
+  const heartbeat = await service.poll(f.ctx({ claim: false }));
+  assert.equal(heartbeat.catalogRequest, undefined);
+  const claimed = await service.poll(f.ctx({ claim: true }));
+  assert.equal(claimed.catalogRequest.id, request.id);
+  await service.completeCatalog(f.ctx({ catalogRequestId: request.id, references }));
+  return catalogService.details(catalogCtx(f));
+}
+
+test('catalog detection is idempotent, exact, independent of test runs and supports empty inventories', async () => {
+  const f = fixture();
+  const result = await completedCatalog(f, []);
+  assert.equal(result.state, 'completed');
+  assert.deepEqual(result.references, []);
+  assert.equal(f.state().writes, 0);
+  assert.equal(f.state().jobs.length, 0);
+  const retried = await service.completeCatalog(f.ctx({ catalogRequestId: 1, references: [] }));
+  assert.equal(retried.state, 'completed');
+  const repeated = await catalogService.request(catalogCtx(f, { runnerId: 1, requestId: 'catalog', environment: 'test' }));
+  assert.equal(repeated.id, 1);
+  assert.equal(f.state().catalogs.length, 1);
+});
+
+test('old, offline and busy runners cannot discover; discovery excludes execution enqueues', async () => {
+  const f = fixture();
+  await f.register();
+  const request = () => catalogService.request(catalogCtx(f, { runnerId: 1, requestId: 'catalog', environment: 'local' }));
+  await assert.rejects(request(), /Actualiza/);
+  f.state().runners[0].catalogRefreshVersion = 1;
+  f.state().runners[0].lastSeenAt = '1970-01-01';
+  await assert.rejects(request(), /desconectado/);
+  f.state().runners[0].lastSeenAt = new Date().toISOString();
+  await f.enqueue();
+  await assert.rejects(request(), /ocupado/);
+  f.state().jobs[0].activeRunner = null;
+  f.state().jobs[0].activeRun = null;
+  f.state().jobs[0].state = 'completed';
+  await request();
+  await assert.rejects(f.enqueue({ requestId: 'other' }), /detectando/);
+});
+
+test('catalog failures and expiration release the runner without modifying results', async () => {
+  const f = fixture();
+  await service.register(f.ctx({ catalog: refs, catalogRefreshVersion: 1 }));
+  await catalogService.request(catalogCtx(f, { runnerId: 1, requestId: 'catalog', environment: 'local' }));
+  await service.poll(f.ctx({ claim: true }));
+  await service.completeCatalog(f.ctx({ catalogRequestId: 1, error: 'Script error' }));
+  assert.equal(f.state().catalogs[0].state, 'failed');
+  assert.equal(f.state().catalogs[0].activeRunner, null);
+  await catalogService.request(catalogCtx(f, { runnerId: 1, requestId: 'again', environment: 'local' }));
+  f.state().catalogs[1].requestedAt = '1970-01-01';
+  await service.sweep();
+  assert.equal(f.state().catalogs[1].state, 'failed');
+  assert.equal(f.state().writes, 0);
+});
+
+test('reviewed assignments preserve content, set automation fields, clear stale metadata and retry idempotently', async () => {
+  const f = fixture();
+  Object.assign(f.state().cases[0], { automationStatus: 'not_automated', automationTool: null,
+    automationType: 'api', description: 'preserved', automationOwner: 'Kimberly', sortOrder: 7,
+    lastAutomationStatus: 'passed', lastAutomationRunAt: '2026-01-01' });
+  const catalog = await completedCatalog(f);
+  const data = { requestId: 'assign', catalogHash: catalog.catalogHash, assignments: [
+    { caseId: 'c0', reference: catalog.references[0], snapshot: catalog.cases[0].snapshot },
+  ] };
+  await catalogService.assign(catalogCtx(f, data));
+  const item = f.state().cases[0];
+  assert.equal(item.automationStatus, 'automated');
+  assert.equal(item.isAutomated, true);
+  assert.equal(item.automationTool, 'playwright');
+  assert.equal(item.automationType, 'api');
+  assert.equal(item.description, 'preserved');
+  assert.equal(item.automationOwner, 'Kimberly');
+  assert.equal(item.sortOrder, 7);
+  assert.equal(item.lastAutomationStatus, 'unknown');
+  assert.equal(item.lastAutomationRunAt, null);
+  await catalogService.assign(catalogCtx(f, data));
+  assert.equal(f.state().writes, 1);
+  assert.equal(f.state().catalogs[0].assignmentReceipts.length, 1);
+});
+
+test('stale selections and references owned by manual/obsolete cases reject the entire batch', async () => {
+  const f = fixture();
+  const catalog = await completedCatalog(f);
+  const data = { requestId: 'assign', catalogHash: catalog.catalogHash, assignments: [
+    { caseId: 'c0', reference: catalog.references[0], snapshot: catalog.cases[0].snapshot },
+    { caseId: 'c1', reference: catalog.references[1], snapshot: catalog.cases[1].snapshot },
+  ] };
+  f.state().cases[1].updatedAt = '2026-10-08';
+  await assert.rejects(catalogService.assign(catalogCtx(f, data)), /cambió/);
+  assert.equal(f.state().writes, 0);
+  delete f.state().cases[1].updatedAt;
+  f.state().cases.push({ documentId: 'manual', automationStatus: 'obsolete', automationReference: catalog.references[0] });
+  await assert.rejects(catalogService.assign(catalogCtx(f, data)), /otro caso/);
+  assert.equal(f.state().writes, 0);
+});
+
+test('assignments roll back all writes when a later write fails', async () => {
+  const f = fixture();
+  const catalog = await completedCatalog(f);
+  f.state().failWriteAt = 2;
+  await assert.rejects(catalogService.assign(catalogCtx(f, { requestId: 'assign', catalogHash: catalog.catalogHash,
+    assignments: catalog.cases.map((item, i) => ({ caseId: item.id, reference: catalog.references[i], snapshot: item.snapshot })) })), /Simulated/);
+  assert.equal(f.state().writes, 0);
+  assert.deepEqual(f.state().cases.map(item => item.automationReference), refs);
+  assert.equal(f.state().catalogs[0].assignmentReceipts.length, 0);
+});
+
+test('catalog access checks membership and hides another project request; duplicates and casing are exact', async () => {
+  const f = fixture();
+  const catalog = await completedCatalog(f, ['A.spec.ts::test', 'A.spec.ts::test', 'a.spec.ts::test']);
+  const data = { requestId: 'assign', catalogHash: catalog.catalogHash,
+    assignments: [{ caseId: 'c0', reference: 'A.spec.ts::test', snapshot: catalog.cases[0].snapshot }] };
+  await assert.rejects(catalogService.assign(catalogCtx(f, data)), /ambigua/);
+  data.assignments[0].reference = 'a.spec.ts::test';
+  await catalogService.assign(catalogCtx(f, data));
+  f.state().catalogs[0].projectId = 'other';
+  await assert.rejects(catalogService.details(catalogCtx(f)), /no encontrada/);
+  f.state().memberships[0].organizationRole.code = 'viewer';
+  await assert.rejects(catalogService.connections(catalogCtx(f)), /engineering/);
+});
 
 test('inspection counts only jobs for the current run and project beyond the history limit', async () => {
   const f = fixture();

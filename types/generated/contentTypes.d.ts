@@ -430,6 +430,67 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAutomationCatalogAutomationCatalog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'automation_catalog_requests';
+  info: {
+    displayName: 'Automation catalog request';
+    pluralName: 'automation-catalogs';
+    singularName: 'automation-catalog';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    'content-manager': {
+      visible: false;
+    };
+    'content-type-builder': {
+      visible: false;
+    };
+  };
+  attributes: {
+    activeRunner: Schema.Attribute.Integer &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    assignmentReceipts: Schema.Attribute.JSON & Schema.Attribute.Private;
+    catalogHash: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    environment: Schema.Attribute.Enumeration<['local', 'test']> &
+      Schema.Attribute.Required;
+    error: Schema.Attribute.Text;
+    finishedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::automation-catalog.automation-catalog'
+    > &
+      Schema.Attribute.Private;
+    projectId: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    references: Schema.Attribute.JSON;
+    requestedAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    requestedBy: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private;
+    requestKey: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    runnerId: Schema.Attribute.Integer & Schema.Attribute.Required;
+    startedAt: Schema.Attribute.DateTime;
+    state: Schema.Attribute.Enumeration<
+      ['pending', 'running', 'completed', 'failed']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiAutomationConnectionAutomationConnection
   extends Struct.CollectionTypeSchema {
   collectionName: 'automation_connections';
@@ -613,6 +674,8 @@ export interface ApiAutomationRunnerAutomationRunner
   attributes: {
     catalog: Schema.Attribute.JSON & Schema.Attribute.Required;
     catalogHash: Schema.Attribute.String & Schema.Attribute.Required;
+    catalogRefreshVersion: Schema.Attribute.Integer &
+      Schema.Attribute.DefaultTo<0>;
     connectionId: Schema.Attribute.Integer &
       Schema.Attribute.Required &
       Schema.Attribute.Private &
@@ -3105,6 +3168,7 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::automation-catalog.automation-catalog': ApiAutomationCatalogAutomationCatalog;
       'api::automation-connection.automation-connection': ApiAutomationConnectionAutomationConnection;
       'api::automation-import-history.automation-import-history': ApiAutomationImportHistoryAutomationImportHistory;
       'api::automation-job.automation-job': ApiAutomationJobAutomationJob;

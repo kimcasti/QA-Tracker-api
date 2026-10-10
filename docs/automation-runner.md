@@ -1,5 +1,7 @@
 # Protocolo de ejecutor local, versión 1
 
+La detección y asignación de referencias desde Estrategia QA se documenta en [automation-catalog.md](automation-catalog.md).
+
 La implementación está en `src/api/automation-runner`. Requiere publicar API, frontend y scripts del proyecto automatizado de forma coordinada. No se ha desplegado automáticamente.
 
 ## Persistencia y autorización

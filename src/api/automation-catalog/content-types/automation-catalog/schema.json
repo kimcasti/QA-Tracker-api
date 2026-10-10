@@ -1,0 +1,23 @@
+{
+  "kind": "collectionType",
+  "collectionName": "automation_catalog_requests",
+  "info": { "singularName": "automation-catalog", "pluralName": "automation-catalogs", "displayName": "Automation catalog request" },
+  "options": { "draftAndPublish": false },
+  "pluginOptions": { "content-manager": { "visible": false }, "content-type-builder": { "visible": false } },
+  "attributes": {
+    "projectId": { "type": "string", "required": true },
+    "runnerId": { "type": "integer", "required": true },
+    "requestedBy": { "type": "integer", "required": true, "private": true },
+    "requestKey": { "type": "string", "required": true, "unique": true, "private": true },
+    "activeRunner": { "type": "integer", "unique": true, "private": true },
+    "environment": { "type": "enumeration", "enum": ["local", "test"], "required": true },
+    "state": { "type": "enumeration", "enum": ["pending", "running", "completed", "failed"], "required": true },
+    "requestedAt": { "type": "datetime", "required": true },
+    "startedAt": { "type": "datetime" },
+    "finishedAt": { "type": "datetime" },
+    "references": { "type": "json" },
+    "catalogHash": { "type": "string" },
+    "error": { "type": "text" },
+    "assignmentReceipts": { "type": "json", "private": true }
+  }
+}

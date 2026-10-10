@@ -1,5 +1,6 @@
 import type { Core } from '@strapi/strapi';
 import automationRunner from './api/automation-runner/services/automation-runner';
+import { installTestCaseProjectLock } from './utils/test-case-project-lock';
 import {
   backfillLocalAuthProvider,
   bootstrapAccessControl,
@@ -15,8 +16,9 @@ let runnerTimer: ReturnType<typeof setInterval> | undefined;
 let sweeping = false;
 export default {
   register({ strapi }: { strapi: Core.Strapi }) {
+    installTestCaseProjectLock(strapi);
     // Custom protocol endpoints do not accept the generated content-type CRUD schema.
-    strapi.plugin('documentation')?.service('override').excludeFromGeneration(['automation-runner', 'automation-job']);
+    strapi.plugin('documentation')?.service('override').excludeFromGeneration(['automation-runner', 'automation-job', 'automation-catalog']);
   },
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
