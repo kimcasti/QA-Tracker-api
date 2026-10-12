@@ -7,7 +7,9 @@ export default {
     ['POST', '/jira-integration/:projectKey/issues', 'createIssue'],
   ].map(([method, path, action]) => ({
     method, path, handler: `jira-integration.${action}`,
-    // Strapi action permissions plus project/account authorization in the controller.
-    config: { auth: {}, policies: ['global::has-active-membership'] },
+    // Use the same user JWT validation as personal Jira settings. Custom global
+    // roles must not block users authorized by their organization membership.
+    // Project roles and credential ownership remain enforced in the controller.
+    config: { auth: false, policies: ['global::user-session', 'global::has-active-membership'] },
   })),
 };
