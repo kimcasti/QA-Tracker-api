@@ -1,9 +1,11 @@
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
+  extractConnectedDocumentId,
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
   getUserMemberships,
+  getUserProjectAccessScope,
 } from '../../../utils/tenant';
 
 type ExternalParticipantPayload = {
@@ -15,22 +17,7 @@ type ExternalParticipantPayload = {
 };
 
 function extractRelationDocumentId(rawValue: unknown): string | null {
-  if (!rawValue) return null;
-  if (typeof rawValue === 'string') return rawValue;
-
-  if (typeof rawValue === 'object') {
-    const value = rawValue as {
-      documentId?: string;
-      connect?: Array<{ documentId?: string }>;
-    };
-
-    if (value.documentId) return value.documentId;
-    if (Array.isArray(value.connect) && value.connect[0]?.documentId) {
-      return value.connect[0].documentId;
-    }
-  }
-
-  return null;
+  return extractConnectedDocumentId(rawValue);
 }
 
 function normalizeParticipantData(payload: ExternalParticipantPayload) {
@@ -42,6 +29,11 @@ function normalizeParticipantData(payload: ExternalParticipantPayload) {
 }
 
 async function resolveOrganizationDocumentId(userId: number, payload: ExternalParticipantPayload) {
+  for (const key of ['organization', 'sourceProject'] as const) {
+    if (Object.prototype.hasOwnProperty.call(payload, key) && !extractRelationDocumentId(payload[key])) {
+      throw new errors.ValidationError(`Invalid ${key} relation.`);
+    }
+  }
   const memberships = await getUserMemberships(strapi, userId);
   const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
 
@@ -52,10 +44,7 @@ async function resolveOrganizationDocumentId(userId: number, payload: ExternalPa
   const requestedOrganizationDocumentId = await getOrganizationDocumentIdFromPayload(
     strapi,
     'api::external-participant.external-participant',
-    {
-      organization: payload.organization,
-      project: payload.sourceProject,
-    },
+    payload as Record<string, unknown>,
   );
 
   if (
@@ -111,15 +100,20 @@ export default factories.createCoreController(
       const memberships = await getUserMemberships(strapi, userId);
       const allowedOrganizationDocumentIds = getAllowedOrganizationDocumentIds(memberships);
 
+      const scope = await getUserProjectAccessScope(strapi, userId, memberships);
+      // UAT reuses organization-directory contacts; only project-derived contacts
+      // require an assignment in restricted organizations.
+      const scopeFilter = {
+        organization: { documentId: { $in: allowedOrganizationDocumentIds } },
+        $or: [
+          { organization: { documentId: { $in: scope.unrestrictedOrganizationDocumentIds } } },
+          { sourceProject: { documentId: { $in: scope.allowedProjectDocumentIds } } },
+          { sourceProject: { documentId: { $null: true } } },
+        ],
+      };
       const documents = allowedOrganizationDocumentIds.length
         ? await strapi.documents('api::external-participant.external-participant').findMany({
-            filters: {
-              organization: {
-                documentId: {
-                  $in: allowedOrganizationDocumentIds,
-                },
-              },
-            },
+            filters: { $and: [ctx.query?.filters ?? {}, scopeFilter] } as any,
             populate: {
               organization: {
                 fields: ['documentId', 'name'],
@@ -187,9 +181,9 @@ export default factories.createCoreController(
       const payload = (ctx.request.body?.data || {}) as ExternalParticipantPayload;
       const normalized = normalizeParticipantData(payload);
       const organizationDocumentId = await resolveOrganizationDocumentId(userId, {
+        ...(existing.organization?.documentId ? { organization: existing.organization.documentId } : {}),
+        ...(existing.sourceProject?.documentId ? { sourceProject: existing.sourceProject.documentId } : {}),
         ...payload,
-        organization: payload.organization ?? existing.organization?.documentId,
-        sourceProject: payload.sourceProject ?? existing.sourceProject?.documentId,
       });
       const sourceProjectDocumentId =
         extractRelationDocumentId(payload.sourceProject) ?? existing.sourceProject?.documentId ?? null;

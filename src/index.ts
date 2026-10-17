@@ -10,6 +10,7 @@ import {
   bootstrapOrganizationRoles,
   disablePublicRegistration,
   linkInitialMembership,
+  validateBootstrapUserConfiguration,
 } from './utils/bootstrap';
 
 let runnerTimer: ReturnType<typeof setInterval> | undefined;
@@ -22,15 +23,18 @@ export default {
   },
 
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    // Validate both optional seeds before performing any bootstrap writes.
+    validateBootstrapUserConfiguration();
     await disablePublicRegistration(strapi);
     await bootstrapAccessControl(strapi);
     await backfillLocalAuthProvider(strapi);
 
-    const organization = await bootstrapInitialOrganization(strapi);
-    await bootstrapOrganizationRoles(strapi, organization.documentId);
-
     const user = await bootstrapInitialUser(strapi);
-    await linkInitialMembership(strapi, organization.documentId, user.id);
+    if (user) {
+      const organization = await bootstrapInitialOrganization(strapi);
+      await bootstrapOrganizationRoles(strapi, organization.documentId);
+      await linkInitialMembership(strapi, organization.documentId, user.id);
+    }
     await bootstrapSuperAdminUser(strapi);
     runnerTimer = setInterval(() => {
       if (sweeping) return;

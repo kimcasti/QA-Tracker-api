@@ -1,5 +1,6 @@
+import { errors } from '@strapi/utils';
 import type { Core } from '@strapi/strapi';
-import { ensureUserWorkspace, linkMembershipForRole } from './bootstrap';
+import { ensureUserWorkspace } from './bootstrap';
 
 export const ACTIVE_MEMBERSHIP_REQUIRED_ERROR = 'An active organization membership is required.';
 export const INACTIVE_MEMBERSHIP_ERROR = 'Your organization membership is inactive.';
@@ -101,48 +102,8 @@ export async function getUserMemberships(strapi: Core.Strapi, userId: number) {
     return memberships;
   }
 
-  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
-    where: { id: userId },
-  });
-  const normalizedEmail = (user?.email || '').trim().toLowerCase();
-
-  if (normalizedEmail) {
-    const pendingInvitation = await strapi.documents(
-      'api::organization-invitation.organization-invitation' as any,
-    ).findFirst({
-      filters: {
-        email: normalizedEmail,
-        status: 'pending',
-      },
-      populate: {
-        organization: true,
-        organizationRole: true,
-      },
-      sort: ['invitedAt:desc'],
-    });
-
-    if (pendingInvitation?.organization?.documentId && pendingInvitation.organizationRole?.code) {
-      await linkMembershipForRole(
-        strapi,
-        pendingInvitation.organization.documentId,
-        userId,
-        pendingInvitation.organizationRole.code,
-      );
-
-      await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
-        documentId: pendingInvitation.documentId,
-        data: {
-          status: 'accepted',
-        },
-      });
-    }
-  }
-
-  const invitedMemberships = await findActiveMemberships(strapi, userId);
-
-  if (invitedMemberships.length > 0) {
-    return invitedMemberships;
-  }
+  // Reading memberships must never accept invitations or grant access based on
+  // a declared email. Membership linking belongs to the proof-verified flow.
 
   if (await hasMembershipHistory(strapi, userId)) {
     return [];
@@ -284,23 +245,25 @@ export async function getUserProjectAccessScope(
   };
 }
 
-function extractConnectedDocumentId(rawValue: unknown): string | null {
-  if (!rawValue) return null;
-  if (typeof rawValue === 'string') return rawValue;
-
-  if (typeof rawValue === 'object') {
-    const value = rawValue as {
-      documentId?: string;
-      connect?: Array<{ documentId?: string }>;
-    };
-
-    if (value.documentId) return value.documentId;
-    if (Array.isArray(value.connect) && value.connect[0]?.documentId) {
-      return value.connect[0].documentId;
-    }
+export function extractConnectedDocumentId(rawValue: unknown): string | null {
+  if (typeof rawValue === 'string' && rawValue.trim()) return rawValue;
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return null;
+  const value = rawValue as Record<string, unknown>;
+  const operations = ['documentId', 'connect', 'set'].filter(key => key in value);
+  if (operations.length !== 1 || ('disconnect' in value)) return null;
+  if (operations[0] === 'documentId') {
+    return typeof value.documentId === 'string' && value.documentId.trim() ? value.documentId : null;
   }
+  const relations = value[operations[0]];
+  if (!Array.isArray(relations) || relations.length !== 1) return null;
+  return extractConnectedDocumentId(relations[0]);
+}
 
-  return null;
+function payloadRelation(data: Record<string, unknown>, key: string) {
+  if (!Object.prototype.hasOwnProperty.call(data, key)) return null;
+  const documentId = extractConnectedDocumentId(data[key]);
+  if (!documentId) throw new errors.ValidationError(`Invalid ${key} relation.`);
+  return documentId;
 }
 
 export async function getOrganizationDocumentIdFromPayload(
@@ -308,22 +271,21 @@ export async function getOrganizationDocumentIdFromPayload(
   contentTypeUid: string,
   data: Record<string, unknown>
 ) {
-  const directOrganization = extractConnectedDocumentId(data.organization);
-  if (directOrganization) return directOrganization;
-
-  const projectDocumentId = extractConnectedDocumentId(data.project);
-  if (!projectDocumentId || contentTypeUid === 'api::project.project') {
-    return null;
-  }
+  const directOrganization = payloadRelation(data, 'organization');
+  const projectRelation = contentTypeUid === 'api::external-participant.external-participant'
+    ? 'sourceProject' : 'project';
+  const projectDocumentId = payloadRelation(data, projectRelation);
+  if (!projectDocumentId || contentTypeUid === 'api::project.project') return directOrganization;
 
   const project = await strapi.documents('api::project.project').findOne({
     documentId: projectDocumentId,
-    populate: {
-      organization: true,
-    },
+    populate: { organization: true },
   });
-
-  return project?.organization?.documentId ?? null;
+  if (!project?.organization?.documentId) throw new errors.ValidationError('Project not found or has no organization.');
+  if (directOrganization && directOrganization !== project.organization.documentId) {
+    throw new errors.ValidationError('Project and organization do not match.');
+  }
+  return project.organization.documentId;
 }
 
 export async function getProjectDocumentIdFromPayload(
@@ -335,7 +297,9 @@ export async function getProjectDocumentIdFromPayload(
     return extractConnectedDocumentId(data.documentId) ?? null;
   }
 
-  const directProject = extractConnectedDocumentId(data.project);
+  const projectRelation = contentTypeUid === 'api::external-participant.external-participant'
+    ? 'sourceProject' : 'project';
+  const directProject = extractConnectedDocumentId(data[projectRelation]);
   if (directProject) return directProject;
 
   return null;
@@ -365,12 +329,14 @@ export async function getProjectDocumentIdFromEntity(
     return documentId;
   }
 
+  const projectRelation = contentTypeUid === 'api::external-participant.external-participant'
+    ? 'sourceProject' : 'project';
   const entity = await strapi.documents(contentTypeUid as any).findOne({
     documentId,
     populate: {
-      project: true,
+      [projectRelation]: true,
     },
   });
 
-  return entity?.project?.documentId ?? null;
+  return entity?.[projectRelation]?.documentId ?? null;
 }

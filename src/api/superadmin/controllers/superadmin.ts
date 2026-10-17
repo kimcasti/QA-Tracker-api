@@ -1,4 +1,5 @@
 import { errors } from '@strapi/utils';
+import { createInvitationSecret, rotateInvitationSecretAndSend } from '../../../utils/invitation-tokens';
 import { sendOrganizationInvitationEmail } from '../../../utils/mail';
 import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
 import {
@@ -486,11 +487,13 @@ export default {
       throw new errors.NotFoundError('Organization not found.');
     }
 
+    const secret = createInvitationSecret();
     const created = await strapi.db
       .query('api::organization-invitation.organization-invitation' as any)
       .create({
         data: {
           email,
+          ...secret.data,
           invitedAt: new Date().toISOString(),
           status: 'pending',
           organization: organizationDbRecord.id,
@@ -508,6 +511,7 @@ export default {
     try {
       await sendOrganizationInvitationEmail({
         invitationDocumentId,
+        invitationToken: secret.token,
         recipientEmail: email,
         organizationName: organization.name || 'Organization',
         roleName: role.name || 'Viewer',
@@ -741,28 +745,21 @@ export default {
     }
 
     try {
-      await sendOrganizationInvitationEmail({
+      await rotateInvitationSecretAndSend(strapi, invitationDocumentId, invitationToken => sendOrganizationInvitationEmail({
         invitationDocumentId,
+        invitationToken,
         recipientEmail: invitation.email,
         organizationName: invitation.organization?.name || 'Organization',
         roleName: invitation.organizationRole?.name || 'Viewer',
         inviterEmail: ctx.state.user?.email,
         inviterName: ctx.state.user?.username,
         invitationStatus: 'resent',
-      });
+      }));
     } catch (mailError) {
       throw new errors.ApplicationError(
         mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
       );
     }
-
-    await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
-      documentId: invitationDocumentId,
-      data: {
-        invitedAt: new Date().toISOString(),
-        status: 'pending',
-      },
-    });
 
     await logSuperadminAudit({
       actorUserId: ctx.state.user?.id,

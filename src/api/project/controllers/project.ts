@@ -1,3 +1,4 @@
+import tenantAccess from '../../../policies/tenant-access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES } from '../../../utils/access';
@@ -162,7 +163,8 @@ async function ensureProjectAccess(
   }
 
   if (
-    projectAccessScope.hasProjectRestrictions &&
+    projectAccessScope.restrictedOrganizationDocumentIds.includes(project.organization?.documentId) &&
+    !projectAccessScope.unrestrictedOrganizationDocumentIds.includes(project.organization?.documentId) &&
     !projectAccessScope.allowedProjectDocumentIds.includes(project.documentId)
   ) {
     throw new errors.ForbiddenError('Your role is not assigned to this project.');
@@ -279,6 +281,8 @@ export function createProjectController(input: CreateProjectControllerInput) {
     },
 
     async update(ctx) {
+      await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+        { contentTypeUid: 'api::project.project', allowedRoles: ADMIN_ROLES }, { strapi: input.strapi });
       const userId = ctx.state.user?.id;
 
       if (!userId) {

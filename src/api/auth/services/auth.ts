@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import crypto from 'node:crypto';
+import { consumeInvitationProof, verifyInvitationProof } from '../../../utils/invitation-tokens';
 import {
   bootstrapOrganizationRoles,
   generateUniqueOrganizationSlug,
@@ -16,6 +17,8 @@ type SignupInput = {
   passwordConfirmation?: string;
   contactNumber?: string;
   organizationName?: string;
+  invitationDocumentId?: string;
+  invitationToken?: string;
 };
 
 type ForgotPasswordInput = {
@@ -117,25 +120,58 @@ export async function getAuthenticatedRole(strapi: Core.Strapi) {
   return roles.find((role: { type: string }) => role.type === 'authenticated');
 }
 
-export async function findPendingInvitation(strapi: Core.Strapi, email: string) {
-  return strapi.documents('api::organization-invitation.organization-invitation' as any).findFirst({
-    filters: {
-      email,
-      status: 'pending',
-    },
-    populate: {
-      organization: true,
-      organizationRole: true,
-    },
-    sort: ['invitedAt:desc'],
-  }) as unknown as Promise<PendingInvitation | null>;
-}
-
 export function createAuthService(input: CreateAuthServiceInput) {
   const { strapi } = input;
   const dependencies = resolveDependencies(input.dependencies);
 
+  async function acceptWithTransaction<T>(
+    proof: Parameters<typeof consumeInvitationProof>[1],
+    action: (invitation: Awaited<ReturnType<typeof consumeInvitationProof>>) => Promise<T>,
+  ): Promise<T> {
+    // The replay barrier must survive rollback. Never run it in an outer
+    // transaction whose owner could restore the consumed secret.
+    if (strapi.db.inTransaction()) {
+      throw new errors.ApplicationError('Invitation acceptance requires its own transaction.');
+    }
+    const invitation = await consumeInvitationProof(strapi, { ...proof, nowIso: dependencies.getNowIso() });
+    // Burning is durable, but accepted is authorization-bearing: publish it only
+    // with the access writes. The exact burned hash + null expiry fences resends,
+    // including resend delivery failures that clear their replacement hash.
+    return strapi.db.transaction(async () => {
+      const result = await action(invitation);
+      const publication = await strapi.db.query('api::organization-invitation.organization-invitation' as any).updateMany({
+        where: { documentId: invitation.documentId, email: invitation.email, status: 'pending',
+          tokenHash: invitation.tokenHash, tokenExpiresAt: null },
+        data: { status: 'accepted', tokenHash: null, tokenExpiresAt: null },
+      });
+      if (publication.count !== 1) {
+        throw new errors.ValidationError('Invitation is invalid or expired. Request a new invitation email.');
+      }
+      return result;
+    });
+  }
+
   return {
+    async acceptInvitation(payload: Pick<SignupInput, 'email' | 'password' | 'invitationDocumentId' | 'invitationToken'>) {
+      const email = normalizeEmail(payload.email);
+      const proof = { documentId: payload.invitationDocumentId, token: payload.invitationToken,
+        email, nowIso: dependencies.getNowIso() };
+      await verifyInvitationProof(strapi, proof);
+      const user = await strapi.db.query('plugin::users-permissions.user').findOne({ where: { email } });
+      if (!user || user.email !== email || user.blocked || user.confirmed === false ||
+          user.provider !== undefined && user.provider !== 'local' || !user.password ||
+          typeof payload.password !== 'string' || !payload.password ||
+          !await strapi.plugin('users-permissions').service('user').validatePassword(payload.password, user.password)) {
+        throw new errors.ValidationError('Invalid account credentials.');
+      }
+      return acceptWithTransaction(proof, async (invitation) => {
+        await dependencies.linkMembershipForRole(strapi, invitation.organization.documentId, user.id,
+          invitation.organizationRole.code);
+        const jwt = await strapi.plugin('users-permissions').service('jwt').issue({ id: user.id });
+        return { jwt, user: sanitizeUser(user) };
+      });
+    },
+
     async forgotPassword(payload: ForgotPasswordInput) {
       const email = normalizeEmail(payload.email);
 
@@ -180,7 +216,11 @@ export function createAuthService(input: CreateAuthServiceInput) {
       const passwordConfirmation = (payload.passwordConfirmation || '').trim();
       const contactNumber = (payload.contactNumber || '').trim();
       const organizationName = (payload.organizationName || '').trim();
-      const pendingInvitation = email ? await findPendingInvitation(strapi, email) : null;
+      const proof = { documentId: payload.invitationDocumentId, token: payload.invitationToken,
+        email, nowIso: dependencies.getNowIso() };
+      const hasInvitationProof = payload.invitationDocumentId !== undefined || payload.invitationToken !== undefined;
+      const pendingInvitation: PendingInvitation | null = hasInvitationProof
+        ? await verifyInvitationProof(strapi, proof) : null;
       let username = requestedUsername;
 
       if (
@@ -226,104 +266,94 @@ export function createAuthService(input: CreateAuthServiceInput) {
         username = await resolveAvailableUsername(strapi, username);
       }
 
-      let createdUser: AuthUserRecord | null = null;
-      let acceptedInvitationDocumentId: string | null = null;
-
-      try {
-        createdUser = await strapi.plugin('users-permissions').service('user').add({
-          username,
-          email,
-          provider: 'local',
-          password,
-          contactNumber,
-          confirmed: true,
-          blocked: false,
-          role: authenticatedRole.id,
-        });
-
-        let organizationPayload: { documentId: string; name: string; slug: string } | null = null;
-
-        if (pendingInvitation?.organization?.documentId && pendingInvitation.organizationRole?.code) {
-          await dependencies.linkMembershipForRole(
-            strapi,
-            pendingInvitation.organization.documentId,
-            createdUser.id,
-            pendingInvitation.organizationRole.code,
-          );
-
-          await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
-            documentId: pendingInvitation.documentId,
-            data: {
-              status: 'accepted',
-            },
+      const completeSignup = async (invitation: PendingInvitation | null = null) => {
+        let createdUser: AuthUserRecord | null = null;
+        try {
+          createdUser = await strapi.plugin('users-permissions').service('user').add({
+            username,
+            email,
+            provider: 'local',
+            password,
+            contactNumber,
+            confirmed: true,
+            blocked: false,
+            role: authenticatedRole.id,
           });
 
-          acceptedInvitationDocumentId = pendingInvitation.documentId;
-          organizationPayload = {
-            documentId: pendingInvitation.organization.documentId,
-            name: pendingInvitation.organization.name || '',
-            slug: pendingInvitation.organization.slug || '',
+          let organizationPayload: { documentId: string; name: string; slug: string } | null = null;
+
+          if (invitation?.organization?.documentId && invitation.organizationRole?.code) {
+            await dependencies.linkMembershipForRole(
+              strapi,
+              invitation.organization.documentId,
+              createdUser.id,
+              invitation.organizationRole.code,
+            );
+
+            organizationPayload = {
+              documentId: invitation.organization.documentId,
+              name: invitation.organization.name || '',
+              slug: invitation.organization.slug || '',
+            };
+          } else {
+            const slug = await dependencies.generateUniqueOrganizationSlug(strapi, organizationName);
+            const organization = await strapi.documents('api::organization.organization').create({
+              data: {
+                name: organizationName,
+                slug,
+                plan: 'starter',
+                status: 'active',
+                planStatus: 'active',
+                planUpdatedAt: dependencies.getNowIso(),
+                aiUsageThisMonth: 0,
+                aiResetAt: null,
+                aiLimit: null,
+                exportUsageThisMonth: 0,
+                usageResetAt: null,
+                exportLimitMonthly: null,
+                billingNotes: null,
+                planExpiresAt: null,
+                gracePeriodEndsAt: null,
+              },
+            });
+
+            await dependencies.bootstrapOrganizationRoles(strapi, organization.documentId);
+            await dependencies.linkInitialMembership(strapi, organization.documentId, createdUser.id);
+
+            organizationPayload = {
+              documentId: organization.documentId,
+              name: organization.name,
+              slug: organization.slug,
+            };
+          }
+
+          const jwt = await strapi.plugin('users-permissions').service('jwt').issue({ id: createdUser.id });
+
+          return {
+            jwt,
+            user: sanitizeUser(createdUser),
+            organization: organizationPayload,
           };
-        } else {
-          const slug = await dependencies.generateUniqueOrganizationSlug(strapi, organizationName);
-          const organization = await strapi.documents('api::organization.organization').create({
-            data: {
-              name: organizationName,
-              slug,
-              plan: 'starter',
-              status: 'active',
-              planStatus: 'active',
-              planUpdatedAt: dependencies.getNowIso(),
-              aiUsageThisMonth: 0,
-              aiResetAt: null,
-              aiLimit: null,
-              exportUsageThisMonth: 0,
-              usageResetAt: null,
-              exportLimitMonthly: null,
-              billingNotes: null,
-              planExpiresAt: null,
-              gracePeriodEndsAt: null,
-            },
-          });
+        } catch (error) {
+          // Invitation account/link writes are rolled back together by Strapi;
+          // never compensate by deleting a user's preexisting memberships.
+          if (pendingInvitation) throw error;
 
-          await dependencies.bootstrapOrganizationRoles(strapi, organization.documentId);
-          await dependencies.linkInitialMembership(strapi, organization.documentId, createdUser.id);
+          if (createdUser?.id) {
+            await strapi.db.query('api::organization-membership.organization-membership').deleteMany({
+              where: { user: createdUser.id },
+            });
+            await strapi.db.query('plugin::users-permissions.user').delete({
+              where: { id: createdUser.id },
+            });
+          }
 
-          organizationPayload = {
-            documentId: organization.documentId,
-            name: organization.name,
-            slug: organization.slug,
-          };
+          throw error;
         }
-
-        const jwt = strapi.plugin('users-permissions').service('jwt').issue({ id: createdUser.id });
-
-        return {
-          jwt,
-          user: sanitizeUser(createdUser),
-          organization: organizationPayload,
-        };
-      } catch (error) {
-        if (acceptedInvitationDocumentId) {
-          await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
-            documentId: acceptedInvitationDocumentId,
-            data: {
-              status: 'pending',
-            },
-          });
-        }
-
-        if (createdUser?.id) {
-          await strapi.db.query('api::organization-membership.organization-membership').deleteMany({
-            where: { user: createdUser.id },
-          });
-          await strapi.db.query('plugin::users-permissions.user').delete({
-            where: { id: createdUser.id },
-          });
-        }
-
-        throw error;
-      }
+      };
+      return pendingInvitation
+        ? acceptWithTransaction(proof, completeSignup)
+        : completeSignup();
     },
   };
 }

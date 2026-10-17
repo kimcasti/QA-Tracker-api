@@ -404,6 +404,23 @@ export default factories.createCoreController(
 
       const payload = (ctx.request.body?.data || {}) as PublicUatSessionPayload;
       const externalParticipantDocumentId = extractRelationDocumentId(payload.externalParticipant);
+      if (externalParticipantDocumentId) {
+        const participant = await strapi.documents('api::external-participant.external-participant').findFirst({
+          filters: {
+            documentId: externalParticipantDocumentId,
+            organization: { documentId: testRun.organization.documentId },
+            // Organization-wide contacts have no source project; project contacts stay scoped.
+            $or: [
+              { sourceProject: { documentId: testRun.project.documentId } },
+              { sourceProject: { id: { $null: true } } },
+            ],
+          },
+          fields: ['documentId'],
+        });
+        if (!participant) {
+          throw new errors.ValidationError('External participant is not available for this test run.');
+        }
+      }
       const nowIso = new Date().toISOString();
       const expiresAt = String(payload.expiresAt || '').trim() || getDefaultExpirationIso();
       const participantNameSnapshot = String(payload.participantNameSnapshot || '').trim() || null;
@@ -592,7 +609,7 @@ export default factories.createCoreController(
       }
 
       const session = await validatePublicSessionToken(token);
-      if (session.status !== 'active') {
+      if (session.status !== 'active' || session.completionLocked) {
         throw new errors.ForbiddenError('This public UAT session is read-only.');
       }
 
@@ -649,7 +666,7 @@ export default factories.createCoreController(
       }
 
       const session = await validatePublicSessionToken(token);
-      if (session.status !== 'active') {
+      if (session.status !== 'active' || session.completionLocked) {
         throw new errors.ForbiddenError('This public UAT session is already closed.');
       }
 

@@ -1,3 +1,5 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { ADMIN_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
@@ -264,6 +266,10 @@ export default factories.createCoreController(
     },
 
     async update(ctx) {
+
+      await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+
+        { contentTypeUid: 'api::project-proposal.project-proposal', allowedRoles: ADMIN_ROLES }, { strapi });
       const userId = ctx.state.user?.id;
 
       if (!userId) {

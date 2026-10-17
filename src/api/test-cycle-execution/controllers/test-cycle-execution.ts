@@ -1,7 +1,10 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { ENGINEERING_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import { ADMIN_ROLES } from '../../../utils/access';
 import {
+  extractConnectedDocumentId,
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
   getUserMemberships,
@@ -204,6 +207,7 @@ async function resolveFunctionalityDocumentId(
   projectDocumentId: string,
   fallbackDocumentId?: string | null,
 ) {
+  if (rawFunctionality === null) return null;
   const requestedDocumentId = extractRelationDocumentId(rawFunctionality);
 
   if (requestedDocumentId) {
@@ -235,6 +239,83 @@ async function resolveFunctionalityDocumentId(
   }
 
   return fallbackDocumentId ?? null;
+}
+
+// Resolve the complete batch before any deduplication or persistence. Never pass
+// unvalidated relation-operation objects through to the document service.
+async function normalizeBatchExecutionRelations(
+  payload: TestCycleExecutionPayload,
+  organizationDocumentId: string,
+  projectDocumentId: string,
+  testCycleDocumentId: string,
+  existing?: any,
+) {
+  const normalized = { ...payload };
+  for (const key of ['functionality', 'testCase', 'bug'] as const) {
+    if (existing && (!hasOwnProperty(payload, key) || payload[key] === undefined)) {
+      normalized[key] = existing[key]?.documentId ?? null;
+    }
+  }
+  for (const [key, expected] of [
+    ['organization', organizationDocumentId], ['project', projectDocumentId], ['testCycle', testCycleDocumentId],
+  ] as const) {
+    if (hasOwnProperty(payload, key) && extractConnectedDocumentId(payload[key]) !== expected) {
+      throw new errors.ValidationError(`Invalid ${key}: must match the persisted test cycle.`);
+    }
+  }
+
+  let testCase: any = null;
+  for (const [key, uid] of [
+    ['functionality', 'api::functionality.functionality'],
+    ['testCase', 'api::test-case.test-case'],
+    ['bug', 'api::bug.bug'],
+  ] as const) {
+    if (!hasOwnProperty(normalized, key) || normalized[key] === undefined) continue;
+    if (normalized[key] === null) continue;
+    const documentId = extractConnectedDocumentId(normalized[key]);
+    if (!documentId) throw new errors.ValidationError(`Invalid ${key} relation.`);
+    const scope = {
+      project: { documentId: projectDocumentId },
+      organization: { documentId: organizationDocumentId },
+    };
+    const filters = { documentId, ...scope };
+    let relation = key === 'testCase'
+      ? await strapi.documents('api::test-case.test-case').findFirst({ filters, populate: { functionality: true } })
+      : await strapi.documents(uid).findFirst({ filters });
+    // The client also supplies functionality codes; resolve aliases within the
+    // same persisted scope, never silently replace an invalid ID with null.
+    if (!relation && key === 'functionality') {
+      relation = await strapi.documents(uid).findFirst({ filters: { code: documentId, ...scope } });
+    }
+    if (!relation?.documentId) throw new errors.ValidationError(`Invalid ${key}: not found in the test cycle project and organization.`);
+    normalized[key] = relation.documentId;
+    if (key === 'testCase') testCase = relation;
+  }
+  if (testCase && normalized.functionality && testCase.functionality?.documentId !== normalized.functionality) {
+    throw new errors.ValidationError('Invalid testCase: functionality must match.');
+  }
+  // Inherited values were inspected, not submitted. Preserve their omission so
+  // a later merge uses the fresh canonical row rather than a stale snapshot.
+  for (const key of ['functionality', 'testCase', 'bug'] as const) {
+    if (!hasOwnProperty(payload, key) || payload[key] === undefined) delete normalized[key];
+  }
+  return normalized;
+}
+
+async function validateExecutionRelationsForParent(
+  ctx: any, payload: TestCycleExecutionPayload, testCycleDocumentId: string, existing?: any,
+) {
+  const parent = await strapi.documents('api::test-cycle.test-cycle').findOne({
+    documentId: testCycleDocumentId, populate: { organization: true, project: true },
+  });
+  if (!parent?.organization?.documentId || !parent.project?.documentId) {
+    throw new errors.ValidationError('Invalid test cycle parent.');
+  }
+  await tenantAccess({ ...ctx, params: { documentId: testCycleDocumentId },
+    request: { ...ctx.request, body: { data: {} } } },
+    { contentTypeUid: 'api::test-cycle.test-cycle', allowedRoles: ENGINEERING_ROLES }, { strapi });
+  return normalizeBatchExecutionRelations(payload, parent.organization.documentId,
+    parent.project.documentId, testCycleDocumentId, existing);
 }
 
 function buildTestCycleExecutionData(
@@ -444,9 +525,65 @@ async function findDuplicateExecution(
   );
 }
 
+async function preauthorizeCycleExecutions(
+  userId: number,
+  organizationDocumentId: string,
+  testCycleDocumentId: string,
+  options: { all?: boolean; targetDocumentId?: string; identity?: string; preferredDocumentId?: string } = {},
+) {
+  const executions = await getCycleExecutions(testCycleDocumentId);
+  const identities = executions.map(item => buildExecutionIdentity({
+    moduleName: item.moduleName,
+    functionalityName: item.functionalityName,
+    functionalityDocumentId: item.functionality?.documentId,
+    functionalityCode: item.functionality?.code,
+    testCaseDocumentId: item.testCase?.documentId,
+    testCaseTitle: item.testCase?.title || item.testCaseTitle,
+  }));
+  const counts = new Map<string, number>();
+  for (const identity of identities) counts.set(identity, (counts.get(identity) || 0) + 1);
+  const accessContext = await getCurrentExecutionAccessContext(
+    userId, organizationDocumentId, executions.find(execution => execution.assignedTesterName)?.assignedTesterName,
+  );
+  // Deduplication can update the winner AND delete every other group member.
+  // Batch replacement can additionally delete all omitted executions.
+  const parent = await strapi.documents('api::test-cycle.test-cycle').findOne({
+    documentId: testCycleDocumentId, populate: { organization: true, project: true },
+  });
+  if (parent?.organization?.documentId !== organizationDocumentId || !parent?.project?.documentId) {
+    throw new errors.ValidationError('Invalid test cycle parent scope.');
+  }
+  const affectedGroups = new Map<string, any[]>();
+  for (const [index, execution] of executions.entries()) {
+    if (!options.all && execution.documentId !== options.targetDocumentId &&
+      identities[index] !== options.identity && (counts.get(identities[index]) || 0) <= 1) continue;
+    assertExecutionAssignmentAccess(execution, accessContext);
+    await normalizeBatchExecutionRelations({}, organizationDocumentId, parent.project.documentId, testCycleDocumentId, execution);
+    const group = affectedGroups.get(identities[index]) || [];
+    group.push(execution);
+    affectedGroups.set(identities[index], group);
+  }
+  // Individually valid fragments can still form an incoherent case/functionality
+  // pair when combined. Check the same pure merge that dedupe will persist.
+  const projectedExecutions = new Map<string, any>();
+  for (const group of affectedGroups.values()) {
+    if (group.length > 1) await normalizeBatchExecutionRelations({}, organizationDocumentId,
+      parent.project.documentId, testCycleDocumentId, mergeExecutionGroup(group));
+    const canonical = group.find(item => item.documentId === options.preferredDocumentId) || selectBestExecution(group);
+    const merged = mergeExecutionGroup(group);
+    const projected = { ...merged, documentId: canonical.documentId,
+      functionality: canonical.functionality || merged.functionality,
+      testCase: canonical.testCase || merged.testCase,
+      bug: canonical.bug || merged.bug };
+    for (const item of group) projectedExecutions.set(item.documentId, projected);
+  }
+  return projectedExecutions;
+}
+
 async function dedupeCycleExecutions(
   testCycleDocumentId: string,
   preferredDocumentId?: string,
+  canonicalDocumentIds?: Map<string, string>,
 ) {
   const executions = await getCycleExecutions(testCycleDocumentId);
   const groups = new Map<string, any[]>();
@@ -467,11 +604,12 @@ async function dedupeCycleExecutions(
   });
 
   for (const group of groups.values()) {
+    const canonical =
+      group.find(item => item.documentId === preferredDocumentId) || selectBestExecution(group);
+    for (const item of group) canonicalDocumentIds?.set(item.documentId, canonical.documentId);
     if (group.length <= 1) continue;
 
     const merged = mergeExecutionGroup(group);
-    const canonical =
-      group.find(item => item.documentId === preferredDocumentId) || selectBestExecution(group);
 
     await strapi.documents('api::test-cycle-execution.test-cycle-execution').update({
       documentId: canonical.documentId,
@@ -736,7 +874,7 @@ export default factories.createCoreController(
         throw new errors.UnauthorizedError('Authentication is required.');
       }
 
-      const payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
+      let payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
       const projectDocumentId = extractRelationDocumentId(payload.project);
       const testCycleDocumentId = extractRelationDocumentId(payload.testCycle);
 
@@ -749,6 +887,7 @@ export default factories.createCoreController(
       }
 
       const organizationDocumentId = await resolveOrganizationDocumentId(userId, payload);
+      payload = await validateExecutionRelationsForParent(ctx, payload, testCycleDocumentId);
       const functionalityDocumentId = await resolveFunctionalityDocumentId(
         payload.functionality,
         projectDocumentId,
@@ -760,10 +899,17 @@ export default factories.createCoreController(
         testCaseDocumentId: extractRelationDocumentId(payload.testCase),
         testCaseTitle: payload.testCaseTitle,
       });
-      const duplicate = await findDuplicateExecution(testCycleDocumentId, identity);
+      let duplicate = await findDuplicateExecution(testCycleDocumentId, identity);
 
       if (duplicate) {
-        await dedupeCycleExecutions(testCycleDocumentId, duplicate.documentId);
+        const canonicalDocumentId = duplicate.documentId;
+        const projected = await preauthorizeCycleExecutions(userId, organizationDocumentId, testCycleDocumentId,
+          { identity, preferredDocumentId: canonicalDocumentId });
+        await normalizeBatchExecutionRelations(payload, organizationDocumentId, projectDocumentId,
+          testCycleDocumentId, projected.get(canonicalDocumentId));
+        const deduped = await dedupeCycleExecutions(testCycleDocumentId, canonicalDocumentId);
+        duplicate = deduped.find(item => item.documentId === canonicalDocumentId);
+        if (!duplicate) throw new errors.NotFoundError('Test cycle execution not found.');
         const accessContext = await getCurrentExecutionAccessContext(
           userId,
           duplicate.organization?.documentId ?? organizationDocumentId,
@@ -781,7 +927,7 @@ export default factories.createCoreController(
         const updated = await strapi.documents('api::test-cycle-execution.test-cycle-execution').update({
           documentId: duplicate.documentId,
           data: {
-            ...buildTestCycleExecutionData(safePayload, projectDocumentId, functionalityDocumentId),
+            ...buildTestCycleExecutionData(safePayload, projectDocumentId, extractRelationDocumentId(safePayload.functionality)),
             organization: organizationDocumentId,
             testCycle: testCycleDocumentId,
           } as any,
@@ -819,6 +965,10 @@ export default factories.createCoreController(
     },
 
     async update(ctx) {
+
+      await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+
+        { contentTypeUid: 'api::test-cycle-execution.test-cycle-execution', allowedRoles: ENGINEERING_ROLES }, { strapi });
       const userId = ctx.state.user?.id;
 
       if (!userId) {
@@ -846,26 +996,7 @@ export default factories.createCoreController(
         throw new errors.NotFoundError('Test cycle execution not found.');
       }
 
-      if (existing.testCycle?.documentId) {
-        await dedupeCycleExecutions(existing.testCycle.documentId, existing.documentId);
-        existing = await strapi.documents('api::test-cycle-execution.test-cycle-execution').findOne({
-          documentId,
-          populate: {
-            organization: true,
-            project: true,
-            testCycle: true,
-            functionality: true,
-            testCase: true,
-            bug: true,
-          },
-        });
-      }
-
-      if (!existing) {
-        throw new errors.NotFoundError('Test cycle execution not found.');
-      }
-
-      const payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
+      let payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
       const projectDocumentId =
         extractRelationDocumentId(payload.project) ?? existing.project?.documentId ?? null;
       const testCycleDocumentId =
@@ -890,6 +1021,7 @@ export default factories.createCoreController(
         existing.assignedTesterName,
       );
       assertExecutionAssignmentAccess(existing, accessContext);
+      payload = await validateExecutionRelationsForParent(ctx, payload, testCycleDocumentId, existing);
 
       const functionalityDocumentId = await resolveFunctionalityDocumentId(
         payload.functionality,
@@ -911,7 +1043,18 @@ export default factories.createCoreController(
       );
 
       if (duplicate) {
+        const projected = await preauthorizeCycleExecutions(userId, organizationDocumentId, testCycleDocumentId, {
+          targetDocumentId: duplicate.documentId,
+          preferredDocumentId: existing.documentId,
+        });
+        await normalizeBatchExecutionRelations(payload, organizationDocumentId, projectDocumentId,
+          testCycleDocumentId, projected.get(existing.documentId) || existing);
         await dedupeCycleExecutions(testCycleDocumentId, existing.documentId);
+        existing = await strapi.documents('api::test-cycle-execution.test-cycle-execution').findOne({
+          documentId,
+          populate: { organization: true, project: true, testCycle: true, ...executionDedupPopulate },
+        });
+        if (!existing) throw new errors.NotFoundError('Test cycle execution not found.');
       }
       const safePayload = mergeExecutionPayloadWithExisting(
         existing,
@@ -924,7 +1067,7 @@ export default factories.createCoreController(
       const updated = await strapi.documents('api::test-cycle-execution.test-cycle-execution').update({
         documentId,
         data: {
-          ...buildTestCycleExecutionData(safePayload, projectDocumentId, functionalityDocumentId),
+          ...buildTestCycleExecutionData(safePayload, projectDocumentId, extractRelationDocumentId(safePayload.functionality)),
           organization: organizationDocumentId,
           testCycle: testCycleDocumentId,
         } as any,
@@ -950,7 +1093,6 @@ export default factories.createCoreController(
 
       const payload = (ctx.request.body?.data || {}) as BatchExecutionSyncPayload;
       const testCycleDocumentId = extractRelationDocumentId(payload.testCycle);
-      const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
       const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
       const items = Array.isArray(payload.items) ? payload.items : [];
 
@@ -970,7 +1112,16 @@ export default factories.createCoreController(
         throw new errors.NotFoundError('Test cycle not found.');
       }
 
-      const projectDocumentId = requestedProjectDocumentId ?? testCycle.project?.documentId ?? null;
+      await tenantAccess({ ...ctx, params: { documentId: testCycleDocumentId },
+        request: { ...ctx.request, body: { data: {} } } },
+        { contentTypeUid: 'api::test-cycle.test-cycle', allowedRoles: ENGINEERING_ROLES }, { strapi });
+
+      const projectDocumentId = testCycle.project?.documentId ?? null;
+      for (const [key, expected] of [['project', projectDocumentId], ['organization', testCycle.organization?.documentId]] as const) {
+        if (hasOwnProperty(payload, key) && (!extractConnectedDocumentId(payload[key]) || extractConnectedDocumentId(payload[key]) !== expected)) {
+          throw new errors.ValidationError(`Invalid ${key}: must match the persisted test cycle.`);
+        }
+      }
 
       if (!projectDocumentId) {
         throw new errors.ValidationError('Test cycle execution project is required.');
@@ -981,7 +1132,76 @@ export default factories.createCoreController(
         organization: requestedOrganizationDocumentId ?? testCycle.organization?.documentId ?? null,
       });
 
-      const dedupedExecutions = await dedupeCycleExecutions(testCycleDocumentId);
+      const persistedExecutions = await getCycleExecutions(testCycleDocumentId);
+      const preparedItems: BatchExecutionSyncItem[] = [];
+      for (const item of items) {
+        let existing = item?.documentId
+          ? persistedExecutions.find(execution => execution.documentId === item.documentId) : null;
+        if (item?.documentId && !existing) {
+          throw new errors.ValidationError('Invalid execution: not found in the persisted test cycle.');
+        }
+        let data = await normalizeBatchExecutionRelations(
+          item?.data || {}, organizationDocumentId, projectDocumentId, testCycleDocumentId, existing,
+        );
+        if (!existing) {
+          const identity = buildExecutionIdentity({
+            ...data,
+            functionalityDocumentId: extractRelationDocumentId(data.functionality),
+            testCaseDocumentId: extractRelationDocumentId(data.testCase),
+          });
+          existing = persistedExecutions.find(execution => buildExecutionIdentity({
+            ...execution,
+            functionalityDocumentId: execution.functionality?.documentId,
+            functionalityCode: execution.functionality?.code,
+            testCaseDocumentId: execution.testCase?.documentId,
+            testCaseTitle: execution.testCase?.title || execution.testCaseTitle,
+          }) === identity);
+          if (existing) data = await normalizeBatchExecutionRelations(
+            data, organizationDocumentId, projectDocumentId, testCycleDocumentId, existing,
+          );
+        }
+        preparedItems.push({ ...item, documentId: existing?.documentId ?? item?.documentId, data });
+      }
+
+      const projected = await preauthorizeCycleExecutions(userId, organizationDocumentId, testCycleDocumentId, { all: true });
+      const requestedCanonicalIds = new Set<string>();
+      const requestedLookupIdentities = new Map<string, boolean>();
+      const requestedFinalIdentities = new Set<string>();
+      for (const item of preparedItems) {
+        const existing = item.documentId ? projected.get(item.documentId) : undefined;
+        if (existing && requestedCanonicalIds.has(existing.documentId)) {
+          throw new errors.ValidationError('Ambiguous batch: multiple items target the same canonical execution.');
+        }
+        if (existing) requestedCanonicalIds.add(existing.documentId);
+        const data = item.data || {};
+        await normalizeBatchExecutionRelations(data, organizationDocumentId, projectDocumentId,
+          testCycleDocumentId, existing);
+        // Runtime indexes each saved row by the incoming identity, even for an
+        // explicit ID. A new item must not reuse another item's lookup alias.
+        const lookupIdentity = buildExecutionIdentity({
+          ...data,
+          functionalityDocumentId: extractRelationDocumentId(data.functionality),
+          testCaseDocumentId: extractRelationDocumentId(data.testCase),
+        });
+        if (requestedLookupIdentities.has(lookupIdentity) &&
+            (!existing || requestedLookupIdentities.get(lookupIdentity))) {
+          throw new errors.ValidationError('Ambiguous batch: repeated execution lookup identity.');
+        }
+        requestedLookupIdentities.set(lookupIdentity, !existing);
+        const effective = existing ? mergeExecutionPayloadWithExisting(existing, data,
+          organizationDocumentId, projectDocumentId, testCycleDocumentId) : data;
+        const finalIdentity = buildExecutionIdentity({
+          ...effective,
+          functionalityDocumentId: extractRelationDocumentId(effective.functionality),
+          testCaseDocumentId: extractRelationDocumentId(effective.testCase),
+        });
+        if (requestedFinalIdentities.has(finalIdentity)) {
+          throw new errors.ValidationError('Ambiguous batch: multiple items converge on the same execution identity.');
+        }
+        requestedFinalIdentities.add(finalIdentity);
+      }
+      const canonicalDocumentIds = new Map<string, string>();
+      const dedupedExecutions = await dedupeCycleExecutions(testCycleDocumentId, undefined, canonicalDocumentIds);
       const existingExecutionsByDocumentId = new Map(
         dedupedExecutions.map(item => [item.documentId, item]),
       );
@@ -1001,12 +1221,9 @@ export default factories.createCoreController(
 
       const savedExecutionIds = new Set<string>();
 
-      for (const item of items) {
+      for (const item of preparedItems) {
         const executionPayload = (item?.data || {}) as TestCycleExecutionPayload;
-        const functionalityDocumentId = await resolveFunctionalityDocumentId(
-          executionPayload.functionality,
-          projectDocumentId,
-        );
+        const functionalityDocumentId = extractRelationDocumentId(executionPayload.functionality);
         const executionIdentity = buildExecutionIdentity({
           moduleName: executionPayload.moduleName,
           functionalityName: executionPayload.functionalityName,
@@ -1017,7 +1234,7 @@ export default factories.createCoreController(
 
         const existingExecution =
           (item?.documentId
-            ? existingExecutionsByDocumentId.get(item.documentId)
+            ? existingExecutionsByDocumentId.get(canonicalDocumentIds.get(item.documentId) || item.documentId)
             : undefined) || existingExecutionsByIdentity.get(executionIdentity);
 
         if (existingExecution) {
@@ -1041,7 +1258,7 @@ export default factories.createCoreController(
           ).update({
             documentId: existingExecution.documentId,
             data: {
-              ...buildTestCycleExecutionData(safePayload, projectDocumentId, functionalityDocumentId),
+              ...buildTestCycleExecutionData(safePayload, projectDocumentId, extractRelationDocumentId(safePayload.functionality)),
               organization: organizationDocumentId,
               testCycle: testCycleDocumentId,
             } as any,
@@ -1106,6 +1323,8 @@ export default factories.createCoreController(
     },
 
     async persist(ctx) {
+      await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+        { contentTypeUid: 'api::test-cycle-execution.test-cycle-execution', allowedRoles: ENGINEERING_ROLES }, { strapi });
       const userId = ctx.state.user?.id;
 
       if (!userId) {
@@ -1138,6 +1357,27 @@ export default factories.createCoreController(
         throw new errors.ValidationError('Test cycle execution testCycle is required.');
       }
 
+      let payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
+      payload = await validateExecutionRelationsForParent(ctx, payload, testCycleDocumentId, existing);
+      const projectedFunctionalityDocumentId = await resolveFunctionalityDocumentId(
+        payload.functionality, existing.project?.documentId, existing.functionality?.documentId ?? null,
+      );
+      const projected = await preauthorizeCycleExecutions(
+        userId, existing.organization?.documentId, testCycleDocumentId,
+        {
+          targetDocumentId: existing.documentId,
+          preferredDocumentId: existing.documentId,
+          identity: buildExecutionIdentity({
+            moduleName: payload.moduleName ?? existing.moduleName,
+            functionalityName: payload.functionalityName ?? existing.functionalityName,
+            functionalityDocumentId: projectedFunctionalityDocumentId,
+            testCaseDocumentId: extractRelationDocumentId(payload.testCase) ?? existing.testCase?.documentId,
+            testCaseTitle: payload.testCaseTitle ?? existing.testCaseTitle,
+          }),
+        },
+      );
+      await normalizeBatchExecutionRelations(payload, existing.organization?.documentId, existing.project?.documentId,
+        testCycleDocumentId, projected.get(existing.documentId));
       await dedupeCycleExecutions(testCycleDocumentId, existing.documentId);
       existing = await strapi.documents('api::test-cycle-execution.test-cycle-execution').findOne({
         documentId,
@@ -1155,7 +1395,6 @@ export default factories.createCoreController(
         throw new errors.NotFoundError('Test cycle execution not found.');
       }
 
-      const payload = (ctx.request.body?.data || {}) as TestCycleExecutionPayload;
       const projectDocumentId = existing.project?.documentId ?? null;
 
       if (!projectDocumentId) {

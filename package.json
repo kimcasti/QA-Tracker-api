@@ -14,7 +14,7 @@
     "jira:privacy-report": "node ./dist/src/scripts/run-jira-privacy-report.js",
     "start": "strapi start",
     "strapi": "strapi",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "node scripts/run-unit-tests.mjs",
     "types:generate": "strapi ts:generate-types",
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"

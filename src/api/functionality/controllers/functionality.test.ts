@@ -250,6 +250,11 @@ test('functionality reorder updates only the requested sort orders for the same 
   const controller = createFunctionalityController({
     strapi: {
       documents(uid: string) {
+        if (uid === 'api::organization-membership.organization-membership') {
+          return { findMany: async () => [{
+            organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' },
+          }] };
+        }
         if (uid === 'api::functionality.functionality') {
           return {
             findOne: async ({ documentId }: { documentId: string }) => records.get(documentId) ?? null,

@@ -1,6 +1,9 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { MANAGE_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
+  extractConnectedDocumentId,
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
   getUserMemberships,
@@ -19,22 +22,7 @@ function normalizeProjectStoryMapData(payload: ProjectStoryMapPayload) {
 }
 
 function extractRelationDocumentId(rawValue: unknown): string | null {
-  if (!rawValue) return null;
-  if (typeof rawValue === 'string') return rawValue;
-
-  if (typeof rawValue === 'object') {
-    const value = rawValue as {
-      documentId?: string;
-      connect?: Array<{ documentId?: string }>;
-    };
-
-    if (value.documentId) return value.documentId;
-    if (Array.isArray(value.connect) && value.connect[0]?.documentId) {
-      return value.connect[0].documentId;
-    }
-  }
-
-  return null;
+  return extractConnectedDocumentId(rawValue);
 }
 
 async function resolveOrganizationDocumentId(userId: number, payload: ProjectStoryMapPayload) {
@@ -96,6 +84,10 @@ export default factories.createCoreController(
     },
 
     async update(ctx) {
+
+      await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+
+        { contentTypeUid: 'api::project-story-map.project-story-map', allowedRoles: MANAGE_ROLES }, { strapi });
       const userId = ctx.state.user?.id;
 
       if (!userId) {

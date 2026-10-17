@@ -44,7 +44,9 @@ async function getProjectAccessOrThrow(userId: number, projectDocumentId: string
   }
 
   const scope = await getUserProjectAccessScope(strapi, userId, memberships);
-  if (scope.hasProjectRestrictions && !scope.allowedProjectDocumentIds.includes(projectDocumentId)) {
+  if (scope.restrictedOrganizationDocumentIds.includes(project.organization.documentId) &&
+      !scope.unrestrictedOrganizationDocumentIds.includes(project.organization.documentId) &&
+      !scope.allowedProjectDocumentIds.includes(projectDocumentId)) {
     throw new errors.ForbiddenError('Your role is not assigned to this project.');
   }
 
@@ -72,7 +74,7 @@ export default factories.createCoreController('api::project-comment.project-comm
 
     await getProjectAccessOrThrow(userId, projectDocumentId);
     const comments = await strapi.documents('api::project-comment.project-comment' as any).findMany({
-      filters: { project: { documentId: { $eq: projectDocumentId } } } as any,
+      filters: { $and: [ctx.query?.filters ?? {}, { project: { documentId: { $eq: projectDocumentId } } }] } as any,
       sort: ['isPinned:desc', 'updatedAt:desc'],
       populate: { author: { fields: ['username', 'email'] }, project: { fields: ['documentId'] } },
     });

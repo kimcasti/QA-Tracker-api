@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 type InvitationEmailPayload = {
   invitationDocumentId: string;
+  invitationToken?: string;
   recipientEmail: string;
   organizationName: string;
   roleName: string;
@@ -100,12 +101,13 @@ function isPlaceholderAppUrl(value?: string) {
   return normalized.includes('replace_with_client_public_url');
 }
 
-export function buildInvitationAcceptanceUrl(invitationDocumentId: string) {
+export function buildInvitationAcceptanceUrl(invitationDocumentId: string, token: string) {
+  if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('An invitation token is required.');
   const { appUrl } = getMailConfig();
-  return `${appUrl}?${new URLSearchParams({
-    invitation: invitationDocumentId,
-    mode: 'signup',
-  }).toString()}`;
+  const url = new URL(appUrl);
+  url.search = new URLSearchParams({ invitation: invitationDocumentId, mode: 'signup' }).toString();
+  url.hash = new URLSearchParams({ invitationToken: token }).toString();
+  return url.toString();
 }
 
 export function buildPasswordResetUrl(resetToken: string) {
@@ -147,7 +149,7 @@ export function getInvitationEmailHealth(): InvitationEmailHealth {
     return {
       manualShareRecommended: true,
       summary:
-        'INVITATION_APP_URL aún apunta a un placeholder. Comparte el enlace manual mientras ajustas la URL final del cliente.',
+        'INVITATION_APP_URL aún apunta a un placeholder. Configura la URL final del cliente y reenvía la invitación por correo.',
     };
   }
 
@@ -225,7 +227,7 @@ function parseFromAddress(input: string) {
   };
 }
 
-function buildInvitationEmail(payload: InvitationEmailPayload) {
+export function buildInvitationEmail(payload: InvitationEmailPayload) {
   const config = getMailConfig();
   const subjectPrefix = payload.invitationStatus === 'resent' ? 'Invitación reenviada' : 'Invitación';
   const inviterLine = payload.inviterName || payload.inviterEmail;
@@ -236,7 +238,7 @@ function buildInvitationEmail(payload: InvitationEmailPayload) {
   const workspaceName = payload.workspaceName?.trim();
   const workspaceLogoUrl = payload.workspaceLogoUrl?.trim();
   const brandLogoUrl = config.brandLogoUrl || '';
-  const ctaUrl = buildInvitationAcceptanceUrl(payload.invitationDocumentId);
+  const ctaUrl = buildInvitationAcceptanceUrl(payload.invitationDocumentId, payload.invitationToken!);
   const previewText = `${actionCopy} Organización: ${payload.organizationName}. Rol: ${payload.roleName}.`;
 
   const text = [

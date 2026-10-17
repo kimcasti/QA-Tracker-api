@@ -9,7 +9,7 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Middlewar
     name: 'strapi::cors',
     config: {
       origin: env.array('CLIENT_URLS', ['http://localhost:3000']),
-      headers: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+      headers: ['Content-Type', 'Authorization', 'Origin', 'Accept', 'X-Invitation-Token'],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
     },

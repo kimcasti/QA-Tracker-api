@@ -1,3 +1,5 @@
+import { MANAGE_ROLES } from '../../../utils/access';
+import tenantAccess from '../../../policies/tenant-access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
@@ -315,6 +317,15 @@ export function createFunctionalityController(input: CreateFunctionalityControll
       );
     }
 
+    // Authorize every persisted source before the first update; implicit route
+    // policy organization must not stand in for an item's tenant or project scope.
+    for (const item of normalizedItems) {
+      await tenantAccess({ ...ctx, params: { documentId: item.documentId },
+        request: { ...ctx.request, body: { data: {} } } },
+        { contentTypeUid: 'api::functionality.functionality', allowedRoles: MANAGE_ROLES },
+        { strapi: input.strapi });
+    }
+
     const updatedRecords = await Promise.all(
       normalizedItems.map(item =>
         input.strapi.documents('api::functionality.functionality').update({
@@ -382,6 +393,8 @@ export function createFunctionalityController(input: CreateFunctionalityControll
   },
 
   async update(ctx) {
+    await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+      { contentTypeUid: 'api::functionality.functionality', allowedRoles: MANAGE_ROLES }, { strapi: input.strapi });
     const userId = ctx.state.user?.id;
 
     if (!userId) {

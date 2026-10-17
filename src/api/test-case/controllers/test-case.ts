@@ -1,3 +1,5 @@
+import { MANAGE_ROLES } from '../../../utils/access';
+import tenantAccess from '../../../policies/tenant-access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
@@ -295,6 +297,14 @@ export function createTestCaseController(input: CreateTestCaseControllerInput) {
       );
     }
 
+    // Validate all source permissions before starting this batch's writes.
+    for (const item of normalizedItems) {
+      await tenantAccess({ ...ctx, params: { documentId: item.documentId },
+        request: { ...ctx.request, body: { data: {} } } },
+        { contentTypeUid: 'api::test-case.test-case', allowedRoles: MANAGE_ROLES },
+        { strapi: input.strapi });
+    }
+
     const updatedRecords = await Promise.all(
       normalizedItems.map(item =>
         input.strapi.documents('api::test-case.test-case').update({
@@ -390,6 +400,8 @@ export function createTestCaseController(input: CreateTestCaseControllerInput) {
   },
 
   async update(ctx) {
+    await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+      { contentTypeUid: 'api::test-case.test-case', allowedRoles: MANAGE_ROLES }, { strapi: input.strapi });
     const userId = ctx.state.user?.id;
 
     if (!userId) {

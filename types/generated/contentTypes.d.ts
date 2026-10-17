@@ -1359,6 +1359,8 @@ export interface ApiOrganizationInvitationOrganizationInvitation
     > &
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'pending'>;
+    tokenExpiresAt: Schema.Attribute.DateTime & Schema.Attribute.Private;
+    tokenHash: Schema.Attribute.String & Schema.Attribute.Private;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

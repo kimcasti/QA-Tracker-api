@@ -1,3 +1,5 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { ENGINEERING_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
@@ -454,6 +456,10 @@ export default factories.createCoreController('api::test-run-result.test-run-res
   },
 
   async update(ctx) {
+
+    await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+
+      { contentTypeUid: 'api::test-run-result.test-run-result', allowedRoles: ENGINEERING_ROLES }, { strapi });
     const userId = ctx.state.user?.id;
 
     if (!userId) {

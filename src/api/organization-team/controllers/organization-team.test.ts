@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { errors } from '@strapi/utils';
-import {
+import controller, {
   createDeactivateMemberHandler,
   createInviteHandler,
   createReactivateMemberHandler,
@@ -165,8 +166,16 @@ test('organization-team invite deletes the invitation when email delivery fails'
   assert.deepEqual(deletedInvitationIds, ['inv-1']);
 });
 
-test('organization-team invite unblocks existing users and returns the rebuilt team payload', async () => {
-  const unblockedUsers: number[] = [];
+test('organization-team invite preserves global blocked state and memberships while returning the rebuilt team payload', async () => {
+  const existingUser = { id: 55, email: 'viewer@example.com', blocked: true };
+  const memberships = [
+    { documentId: 'inactive-org-1', organization: { documentId: 'org-1' }, user: { id: 55 }, isActive: false },
+    { documentId: 'active-org-2', organization: { documentId: 'org-2' }, user: { id: 55 }, isActive: true },
+  ];
+  const originalMemberships = structuredClone(memberships);
+  const blockedStateWrites: unknown[] = [];
+  let stored: any;
+  let delivered: any;
 
   const invite = createInviteHandler({
     strapi: {
@@ -174,16 +183,16 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
         query(uid: string) {
           if (uid === 'plugin::users-permissions.user') {
             return {
-              findOne: async () => ({ id: 55, email: 'viewer@example.com' }),
+              findOne: async () => existingUser,
             };
           }
 
           if (uid === 'api::organization-invitation.organization-invitation') {
             return {
-              create: async ({ data }: Record<string, any>) => ({
-                documentId: 'inv-2',
-                ...data,
-              }),
+              create: async ({ data }: Record<string, any>) => {
+                stored = data;
+                return { documentId: 'inv-2', ...data };
+              },
             };
           }
 
@@ -193,7 +202,14 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
       documents(uid: string) {
         if (uid === 'api::organization-membership.organization-membership') {
           return {
-            findFirst: async () => null,
+            findFirst: async ({ filters }: any) => {
+              assert.deepEqual(filters, {
+                organization: { documentId: 'org-1' }, user: { id: 55 }, isActive: true,
+              });
+              return memberships.find(membership =>
+                membership.organization.documentId === filters.organization.documentId && membership.isActive,
+              ) || null;
+            },
           };
         }
 
@@ -232,11 +248,10 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
         workspaceName: 'Portal',
         workspaceLogoUrl: 'https://cdn/logo.png',
       }),
-      sendInvitationEmail: async () => undefined,
+      sendInvitationEmail: async (payload: any) => { delivered = payload; },
       setUserBlockedState: async (userId: number, blocked: boolean) => {
-        if (!blocked) {
-          unblockedUsers.push(userId);
-        }
+        blockedStateWrites.push({ userId, blocked });
+        existingUser.blocked = blocked;
       },
       buildTeamPayload: async () => ({
         organization: { documentId: 'org-1', name: 'Workspace' },
@@ -254,11 +269,91 @@ test('organization-team invite unblocks existing users and returns the rebuilt t
 
   await invite(ctx as any);
 
-  assert.deepEqual(unblockedUsers, [55]);
+  assert.match(delivered.invitationToken, /^[a-f0-9]{64}$/);
+  assert.equal(stored.tokenHash, createHash('sha256').update(delivered.invitationToken).digest('hex'));
+  assert.equal(stored.tokenExpiresAt, '2026-05-15T15:30:00.000Z');
+  assert.equal(JSON.stringify(ctx.body).includes(delivered.invitationToken), false);
+  // A tenant invitation is not global account recovery; a blocked user needs an administrator.
+  assert.equal(existingUser.blocked, true);
+  assert.deepEqual(blockedStateWrites, []);
+  assert.deepEqual(memberships, originalMemberships);
   assert.deepEqual(ctx.body, {
     organization: { documentId: 'org-1', name: 'Workspace' },
     invitations: [{ documentId: 'inv-2', email: 'viewer@example.com' }],
   });
+});
+
+test('organization-team resend preserves global blocked state and memberships while rotating the invitation', async t => {
+  const existingUser = { id: 55, email: 'viewer@example.com', blocked: true };
+  const memberships = [
+    { documentId: 'inactive-org-1', organization: { documentId: 'org-1' }, user: { id: 55 }, isActive: false },
+    { documentId: 'active-org-2', organization: { documentId: 'org-2' }, user: { id: 55 }, isActive: true },
+  ];
+  const originalMemberships = structuredClone(memberships);
+  const invitation = {
+    documentId: 'inv-resend', email: existingUser.email, status: 'pending',
+    tokenHash: 'ab'.repeat(32), tokenExpiresAt: '2026-01-01T00:00:00.000Z',
+    organization: { documentId: 'org-1', name: 'Workspace' },
+    organizationRole: { documentId: 'role-qa', code: 'qa-engineer', name: 'QA Engineer' },
+  };
+  const oldHash = invitation.tokenHash;
+  const writes: string[] = [];
+  const previousStrapi = globalThis.strapi;
+  const env = { MAILTRAP_API_TOKEN: 'unit-test-only', MAIL_FROM: 'qa@example.test',
+    INVITATION_APP_URL: 'https://app.example.test' };
+  const previousEnv = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  const send = t.mock.method(globalThis, 'fetch', async () => ({ ok: true } as Response));
+  Object.assign(process.env, env);
+  globalThis.strapi = {
+    db: {
+      query(uid: string) {
+        assert.equal(uid, 'api::organization-invitation.organization-invitation');
+        return {
+          findOne: async () => invitation,
+          updateMany: async ({ where, data }: any) => {
+            assert.equal(where.documentId, invitation.documentId);
+            assert.equal(where.tokenHash, invitation.tokenHash);
+            writes.push(uid);
+            Object.assign(invitation, data);
+            return { count: 1 };
+          },
+        };
+      },
+    },
+    documents(uid: string) {
+      if (uid === 'api::organization-invitation.organization-invitation') {
+        return { findOne: async () => invitation, findMany: async () => [invitation] };
+      }
+      if (uid === 'api::organization-membership.organization-membership') {
+        return { findMany: async ({ filters }: any) => filters.user
+          ? [{ documentId: 'owner-mem', isActive: true,
+              organization: { documentId: 'org-1', name: 'Workspace' },
+              organizationRole: { code: 'owner' } }]
+          : memberships.filter(membership => membership.organization.documentId === filters.organization.documentId) };
+      }
+      if (uid === 'api::organization-role.organization-role') return { findMany: async () => [] };
+      throw new Error(`Unexpected documents uid: ${uid}`);
+    },
+    log: { error() {} },
+  } as any;
+  try {
+    const ctx = { ...createCtx({}), params: { documentId: invitation.documentId } };
+    await controller.resendInvitation(ctx as any);
+    assert.equal(send.mock.callCount(), 1);
+    assert.notEqual(invitation.tokenHash, oldHash);
+    assert.equal(invitation.status, 'pending');
+    assert.equal(existingUser.blocked, true);
+    assert.deepEqual(memberships, originalMemberships);
+    assert.deepEqual(writes, ['api::organization-invitation.organization-invitation']);
+    assert.equal((ctx.body as any).invitations[0].documentId, invitation.documentId);
+    assert.equal(JSON.stringify(ctx.body).includes(invitation.tokenHash), false);
+  } finally {
+    globalThis.strapi = previousStrapi;
+    send.mock.restore();
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });
 
 test('organization-team updateMemberRole blocks manager/viewer role changes that require project assignment', async () => {

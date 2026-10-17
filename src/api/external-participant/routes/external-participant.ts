@@ -14,6 +14,17 @@ export default factories.createCoreRouter('api::external-participant.external-pa
         },
       ],
     },
+    findOne: {
+      policies: [
+        {
+          name: 'global::tenant-access',
+          config: {
+            contentTypeUid: 'api::external-participant.external-participant',
+            allowedRoles: READ_ROLES,
+          },
+        },
+      ],
+    },
     create: {
       policies: [
         {

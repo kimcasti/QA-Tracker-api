@@ -1,8 +1,8 @@
 import { errors } from '@strapi/utils';
+import { createInvitationSecret, verifyInvitationProof, rotateInvitationSecretAndSend } from '../../../utils/invitation-tokens';
 import { ADMIN_ROLES, OWNER_ROLES } from '../../../utils/access';
 import { assertOrganizationLimitAvailable } from '../../../utils/plan-enforcement';
 import {
-  buildInvitationAcceptanceUrl,
   getInvitationEmailHealth,
   sendOrganizationInvitationEmail,
 } from '../../../utils/mail';
@@ -323,7 +323,6 @@ async function getInvitations(organizationDocumentId: string) {
   return invitations.map(invitation => ({
     documentId: invitation.documentId,
     email: invitation.email,
-    acceptUrl: buildInvitationAcceptanceUrl(invitation.documentId),
     organizationId: invitation.organization?.documentId || organizationDocumentId,
     role: invitation.organizationRole
       ? {
@@ -388,6 +387,7 @@ async function ensureOwnerAccess(userId: number) {
 
 async function sendInvitationEmail(input: {
   invitationDocumentId: string;
+  invitationToken: string;
   recipientEmail: string;
   organizationName: string;
   roleName: string;
@@ -399,6 +399,7 @@ async function sendInvitationEmail(input: {
 }) {
   await sendOrganizationInvitationEmail({
     invitationDocumentId: input.invitationDocumentId,
+    invitationToken: input.invitationToken,
     recipientEmail: input.recipientEmail,
     organizationName: input.organizationName,
     roleName: input.roleName,
@@ -590,11 +591,13 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
       workspaceProjectDocumentIds,
     );
 
+    const secret = createInvitationSecret(dependencies.getNowIso());
     const created = await input.strapi.db
       .query('api::organization-invitation.organization-invitation' as any)
       .create({
         data: {
           email,
+          ...secret.data,
           invitedAt: dependencies.getNowIso(),
           status: 'pending',
           organization: organizationId,
@@ -614,6 +617,7 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
     try {
       await dependencies.sendInvitationEmail({
         invitationDocumentId,
+        invitationToken: secret.token,
         recipientEmail: email,
         organizationName: teamContext.organizationName,
         roleName: roleRecord.name,
@@ -639,10 +643,9 @@ export function createInviteHandler(input: CreateInviteHandlerInput) {
       );
     }
 
-    if (existingUser?.id) {
-      await dependencies.setUserBlockedState(existingUser.id, false);
-    }
-
+    // Sending an invitation does not recover a globally blocked account or change
+    // memberships. The user still needs an administrator to resolve the block
+    // before accepting; a tenant owner cannot clear another tenant's global block.
     ctx.body = await dependencies.buildTeamPayload(userId);
   };
 }
@@ -969,19 +972,11 @@ export default {
       throw new errors.ValidationError('Invitation is required.');
     }
 
-    const invitation = await strapi.documents(
-      'api::organization-invitation.organization-invitation' as any,
-    ).findOne({
-      documentId: invitationDocumentId,
-      populate: {
-        organization: true,
-        organizationRole: true,
-      },
+    const invitation = await verifyInvitationProof(strapi, {
+      documentId: invitationDocumentId, token: ctx.get('X-Invitation-Token'),
     });
-
-    if (!invitation?.documentId || !invitation.organization?.documentId) {
-      throw new errors.NotFoundError('Invitation not found.');
-    }
+    ctx.set('Cache-Control', 'no-store');
+    ctx.set('Referrer-Policy', 'no-referrer');
 
     ctx.body = {
       data: {
@@ -1068,8 +1063,9 @@ export default {
     );
 
     try {
-      await sendInvitationEmail({
+      await rotateInvitationSecretAndSend(strapi, invitationDocumentId, invitationToken => sendInvitationEmail({
         invitationDocumentId,
+        invitationToken,
         recipientEmail: invitation.email,
         organizationName: invitation.organization?.name || teamContext.organizationName,
         roleName: invitation.organizationRole?.name || 'Viewer',
@@ -1078,7 +1074,7 @@ export default {
         inviterEmail: ctx.state.user?.email,
         inviterName: ctx.state.user?.username,
         invitationStatus: 'resent',
-      });
+      }));
     } catch (mailError) {
       strapi.log.error(
         `[organization-team] Failed to resend invitation email to ${invitation.email}: ${
@@ -1090,14 +1086,6 @@ export default {
         mailError instanceof Error ? mailError.message : 'The invitation email could not be sent.',
       );
     }
-
-    await strapi.documents('api::organization-invitation.organization-invitation' as any).update({
-      documentId: invitationDocumentId,
-      data: {
-        invitedAt: new Date().toISOString(),
-        status: 'pending',
-      },
-    });
 
     ctx.body = await buildTeamPayload(userId);
   },

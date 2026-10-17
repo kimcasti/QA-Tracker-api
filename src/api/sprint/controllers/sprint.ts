@@ -1,3 +1,5 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { MANAGE_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
@@ -102,6 +104,10 @@ export default factories.createCoreController('api::sprint.sprint', () => ({
   },
 
   async update(ctx) {
+
+    await tenantAccess({ ...ctx, params: { ...ctx.params, documentId: ctx.params.documentId || ctx.params.id } },
+
+      { contentTypeUid: 'api::sprint.sprint', allowedRoles: MANAGE_ROLES }, { strapi });
     const userId = ctx.state.user?.id;
 
     if (!userId) {

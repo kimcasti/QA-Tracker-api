@@ -234,6 +234,11 @@ test('test-case reorder updates only the requested sort orders for the same func
   const controller = createTestCaseController({
     strapi: {
       documents(uid: string) {
+        if (uid === 'api::organization-membership.organization-membership') {
+          return { findMany: async () => [{
+            organization: { documentId: 'org-1' }, organizationRole: { code: 'qa-lead' },
+          }] };
+        }
         if (uid !== 'api::test-case.test-case') throw new Error(`Unexpected uid: ${uid}`);
         return {
           findOne: async ({ documentId }: { documentId: keyof typeof records }) => records[documentId],

@@ -181,16 +181,37 @@ export async function bootstrapOrganizationRoles(
   }
 }
 
-export async function bootstrapInitialUser(strapi: Core.Strapi) {
-  const authenticatedRole = await getAuthenticatedRole(strapi);
+function getSeedUserConfiguration(prefix: 'INITIAL_USER' | 'SUPERADMIN') {
+  const keys = [`${prefix}_EMAIL`, `${prefix}_USERNAME`, `${prefix}_PASSWORD`,
+    ...(prefix === 'INITIAL_USER' ? ['INITIAL_USER_IS_SUPERADMIN'] : [])];
+  if (!keys.some(key => process.env[key] !== undefined)) return null;
 
+  const email = process.env[`${prefix}_EMAIL`]?.trim();
+  const username = process.env[`${prefix}_USERNAME`]?.trim();
+  const password = process.env[`${prefix}_PASSWORD`];
+  const superAdmin = process.env.INITIAL_USER_IS_SUPERADMIN?.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username ||
+      !password || password.trim().length < 16 || Buffer.byteLength(password, 'utf8') > 72 ||
+      (prefix === 'INITIAL_USER' && superAdmin !== undefined && !['true', 'false'].includes(superAdmin))) {
+    throw new Error(`${prefix} seed configuration must include a valid email, username and a password of at least 16 non-padding characters and at most 72 UTF-8 bytes; privilege flag must be true or false.`);
+  }
+  return { email, username, password };
+}
+
+export function validateBootstrapUserConfiguration() {
+  getSeedUserConfiguration('INITIAL_USER');
+  getSeedUserConfiguration('SUPERADMIN');
+}
+
+export async function bootstrapInitialUser(strapi: Core.Strapi) {
+  const configuration = getSeedUserConfiguration('INITIAL_USER');
+  if (!configuration) return null;
+  const { email, username, password } = configuration;
+
+  const authenticatedRole = await getAuthenticatedRole(strapi);
   if (!authenticatedRole) {
     throw new Error('Authenticated users-permissions role is required before creating seed user.');
   }
-
-  const email = process.env.INITIAL_USER_EMAIL?.trim() || 'admin@qatracker.local';
-  const username = process.env.INITIAL_USER_USERNAME?.trim() || 'admin';
-  const password = process.env.INITIAL_USER_PASSWORD?.trim() || 'ChangeMe123!';
   const shouldBeSuperAdmin = (process.env.INITIAL_USER_IS_SUPERADMIN?.trim() || 'false') === 'true';
 
   const existing = await strapi.db.query('plugin::users-permissions.user').findOne({
@@ -198,19 +219,8 @@ export async function bootstrapInitialUser(strapi: Core.Strapi) {
     populate: ['role'],
   });
 
-  if (existing) {
-    if (!existing.provider || existing.isSuperAdmin !== shouldBeSuperAdmin) {
-      return strapi.db.query('plugin::users-permissions.user').update({
-        where: { id: existing.id },
-        data: {
-          provider: existing.provider || 'local',
-          isSuperAdmin: shouldBeSuperAdmin,
-        },
-        populate: ['role'],
-      });
-    }
-    return existing;
-  }
+  // Seeding must never rotate credentials, change provider or alter existing privileges.
+  if (existing) return existing;
 
   return strapi.plugin('users-permissions').service('user').add({
     username,
@@ -225,18 +235,13 @@ export async function bootstrapInitialUser(strapi: Core.Strapi) {
 }
 
 export async function bootstrapSuperAdminUser(strapi: Core.Strapi) {
+  const configuration = getSeedUserConfiguration('SUPERADMIN');
+  if (!configuration) return null;
+  const { email, username, password } = configuration;
   const authenticatedRole = await getAuthenticatedRole(strapi);
 
   if (!authenticatedRole) {
     throw new Error('Authenticated users-permissions role is required before creating superadmin user.');
-  }
-
-  const email = process.env.SUPERADMIN_EMAIL?.trim();
-  const username = process.env.SUPERADMIN_USERNAME?.trim();
-  const password = process.env.SUPERADMIN_PASSWORD?.trim();
-
-  if (!email || !username || !password) {
-    return null;
   }
 
   const existing = await strapi.db.query('plugin::users-permissions.user').findOne({
@@ -244,20 +249,8 @@ export async function bootstrapSuperAdminUser(strapi: Core.Strapi) {
     populate: ['role'],
   });
 
-  if (existing) {
-    if (!existing.provider || existing.isSuperAdmin !== true) {
-      return strapi.db.query('plugin::users-permissions.user').update({
-        where: { id: existing.id },
-        data: {
-          provider: existing.provider || 'local',
-          isSuperAdmin: true,
-        },
-        populate: ['role'],
-      });
-    }
-
-    return existing;
-  }
+  // Existing accounts are not promoted or otherwise modified during startup.
+  if (existing) return existing;
 
   return strapi.plugin('users-permissions').service('user').add({
     username,
@@ -322,6 +315,11 @@ export async function linkMembershipForRole(
   userId: number,
   roleCode: string
 ) {
+  const user = Number.isSafeInteger(userId) && userId > 0
+    ? await strapi.db.query('plugin::users-permissions.user').findOne({ where: { id: userId } })
+    : null;
+  if (!user) throw new Error('User was not found before linking membership.');
+
   const targetRole = await strapi.documents('api::organization-role.organization-role').findFirst({
     filters: {
       code: roleCode,

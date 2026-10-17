@@ -1,6 +1,9 @@
+import tenantAccess from '../../../policies/tenant-access';
+import { ENGINEERING_ROLES } from '../../../utils/access';
 import { factories } from '@strapi/strapi';
 import { errors } from '@strapi/utils';
 import {
+  extractConnectedDocumentId,
   getAllowedOrganizationDocumentIds,
   getOrganizationDocumentIdFromPayload,
   getUserMemberships,
@@ -407,7 +410,6 @@ async function getProjectBugCatalog(projectDocumentId: string) {
 
 export async function syncBatchTestRunResults(userId: number, payload: BatchTestRunResultSyncPayload) {
   const testRunDocumentId = extractRelationDocumentId(payload.testRun);
-  const requestedProjectDocumentId = extractRelationDocumentId(payload.project);
   const requestedOrganizationDocumentId = extractRelationDocumentId(payload.organization);
   const shouldRemoveMissingResults = payload.removeMissingResults !== false;
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -428,7 +430,16 @@ export async function syncBatchTestRunResults(userId: number, payload: BatchTest
     throw new errors.NotFoundError('Test run not found.');
   }
 
-  const projectDocumentId = requestedProjectDocumentId ?? testRun.project?.documentId ?? null;
+  await tenantAccess({ state: { user: { id: userId } }, params: { documentId: testRunDocumentId },
+    request: { method: 'POST', body: { data: {} } } },
+    { contentTypeUid: 'api::test-run.test-run', allowedRoles: ENGINEERING_ROLES }, { strapi });
+
+  const projectDocumentId = testRun.project?.documentId ?? null;
+  for (const [key, expected] of [['project', projectDocumentId], ['organization', testRun.organization?.documentId]] as const) {
+    if (hasOwnProperty(payload, key) && (!extractConnectedDocumentId(payload[key]) || extractConnectedDocumentId(payload[key]) !== expected)) {
+      throw new errors.ValidationError(`Invalid ${key}: must match the persisted test run.`);
+    }
+  }
   if (!projectDocumentId) {
     throw new errors.ValidationError('Test run result project is required.');
   }

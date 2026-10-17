@@ -10,6 +10,14 @@
     "draftAndPublish": false
   },
   "attributes": {
+    "tokenHash": {
+      "type": "string",
+      "private": true
+    },
+    "tokenExpiresAt": {
+      "type": "datetime",
+      "private": true
+    },
     "email": {
       "type": "email",
       "required": true
