@@ -14,7 +14,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "x-generation-date": "2026-10-10T01:52:38.168Z"
+    "x-generation-date": "2026-10-17T13:58:24.953Z"
   },
   "x-strapi-config": {
     "plugins": [
@@ -24,7 +24,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:1337/api",
+      "url": "http://localhost:1338/api",
       "description": "Development server"
     }
   ],
@@ -7992,85 +7992,6 @@
           }
         ],
         "operationId": "get/public-uat-sessions"
-      },
-      "post": {
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicUatSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Public-uat-session"
-        ],
-        "parameters": [],
-        "operationId": "post/public-uat-sessions",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PublicUatSessionRequest"
-              }
-            }
-          }
-        }
       }
     },
     "/public-uat-sessions/{id}": {
@@ -8153,177 +8074,6 @@
           }
         ],
         "operationId": "get/public-uat-sessions/{id}"
-      },
-      "put": {
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicUatSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Public-uat-session"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "",
-            "deprecated": false,
-            "required": true,
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "operationId": "put/public-uat-sessions/{id}",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PublicUatSessionRequest"
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "integer",
-                  "format": "int64"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Public-uat-session"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "",
-            "deprecated": false,
-            "required": true,
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "operationId": "delete/public-uat-sessions/{id}"
       }
     },
     "/sprints": {
@@ -15739,6 +15489,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -21745,6 +21502,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -28034,6 +27798,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -34082,6 +33853,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -40138,6 +39916,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -46130,6 +45915,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -52248,6 +52040,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -58923,6 +58722,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -64847,6 +64653,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -71200,6 +71013,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -77402,6 +77222,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -83360,6 +83187,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -89329,6 +89163,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -95368,6 +95209,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -101296,6 +101144,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -106129,142 +105984,6 @@
           }
         }
       },
-      "PublicUatSessionRequest": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "required": [
-              "status",
-              "tokenHash",
-              "organization",
-              "project",
-              "testRun"
-            ],
-            "type": "object",
-            "properties": {
-              "status": {
-                "type": "string",
-                "enum": [
-                  "draft",
-                  "active",
-                  "completed",
-                  "expired",
-                  "revoked"
-                ]
-              },
-              "tokenHash": {
-                "type": "string"
-              },
-              "expiresAt": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "activatedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "completedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "revokedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "lastAccessedAt": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "participantNameSnapshot": {
-                "type": "string"
-              },
-              "participantEmailSnapshot": {
-                "type": "string",
-                "format": "email"
-              },
-              "deliveryNotes": {
-                "type": "string"
-              },
-              "allowResultEditing": {
-                "type": "boolean"
-              },
-              "allowEvidenceUpload": {
-                "type": "boolean"
-              },
-              "allowCommentEditing": {
-                "type": "boolean"
-              },
-              "completionLocked": {
-                "type": "boolean"
-              },
-              "organization": {
-                "oneOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
-                "example": "string or id"
-              },
-              "project": {
-                "oneOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
-                "example": "string or id"
-              },
-              "testRun": {
-                "oneOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
-                "example": "string or id"
-              },
-              "externalParticipant": {
-                "oneOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
-                "example": "string or id"
-              },
-              "locale": {
-                "type": "string"
-              },
-              "localizations": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "type": "integer"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ],
-                  "example": "string or id"
-                }
-              }
-            }
-          }
-        }
-      },
       "PublicUatSessionListResponse": {
         "type": "object",
         "properties": {
@@ -107443,6 +107162,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -113442,6 +113168,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -119558,6 +119291,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -125637,6 +125377,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -131776,6 +131523,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -137883,6 +137637,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -143993,6 +143754,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
@@ -150147,6 +149915,13 @@
                     "documentId": {
                       "type": "string"
                     },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "email": {
                       "type": "string",
                       "format": "email"
@@ -156241,6 +156016,13 @@
                     },
                     "documentId": {
                       "type": "string"
+                    },
+                    "tokenHash": {
+                      "type": "string"
+                    },
+                    "tokenExpiresAt": {
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "email": {
                       "type": "string",
