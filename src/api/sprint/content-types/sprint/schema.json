@@ -15,12 +15,10 @@
       "required": true
     },
     "startDate": {
-      "type": "date",
-      "required": true
+      "type": "date"
     },
     "endDate": {
-      "type": "date",
-      "required": true
+      "type": "date"
     },
     "status": {
       "type": "enumeration",

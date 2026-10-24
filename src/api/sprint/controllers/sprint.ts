@@ -21,8 +21,8 @@ type SprintPayload = {
 function normalizeSprintData(payload: SprintPayload) {
   return {
     name: payload.name || '',
-    startDate: payload.startDate || '',
-    endDate: payload.endDate || '',
+    ...(payload.startDate ? { startDate: payload.startDate } : {}),
+    ...(payload.endDate ? { endDate: payload.endDate } : {}),
     status: payload.status || 'planned',
     objective: payload.objective || '',
   };
