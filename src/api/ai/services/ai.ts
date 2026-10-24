@@ -313,7 +313,7 @@ function normalizeGeneratedTestCase(testCase: GeneratedAiTestCase) {
     preconditions: normalizeAiTextBlock(testCase?.preconditions),
     testSteps: normalizeAiTextBlock(testCase?.testSteps, { numbered: true }),
     expectedResult: normalizeAiTextBlock(testCase?.expectedResult),
-    testType: normalizeAiTextBlock(testCase?.testType) || 'Funcional',
+    testType: normalizeAiTextBlock(testCase?.testType) === 'UAT' ? 'UAT' : 'Funcional',
     priority: normalizeAiTextBlock(testCase?.priority) || 'Medio',
   };
 }
@@ -1184,7 +1184,7 @@ Responde solo con JSON válido:
   "priority": "Medio"
 }
 
-Usa testType solo de esta lista: Integración, Funcional, Sanity, Regresión, Smoke, Exploratoria, UAT.
+Usa testType solo de esta lista: Funcional, UAT.
 Usa priority solo de esta lista: Crítico, Alto, Medio, Bajo.`;
 
     return runAiAction(userId, input.projectId, () =>
