@@ -1,7 +1,22 @@
-import { READ_ROLES } from '../../../utils/access';
+import { ADMIN_ROLES, READ_ROLES } from '../../../utils/access';
 
 export default {
   routes: [
+    ...['reopen', 'expiration'].map(action => ({
+      method: 'PUT',
+      path: `/public-uat-sessions/test-runs/:documentId/${action}`,
+      handler: `public-uat-session.${action}`,
+      config: {
+        auth: {},
+        policies: [{
+          name: 'global::tenant-access',
+          config: {
+            contentTypeUid: 'api::test-run.test-run',
+            allowedRoles: ADMIN_ROLES,
+          },
+        }],
+      },
+    })),
     {
       method: 'POST',
       path: '/public-uat-sessions/test-runs/:documentId/activate',

@@ -71,6 +71,27 @@ function getDefaultExpirationIso() {
   return expiresAt.toISOString();
 }
 
+function parseFutureExpiration(value: unknown): string {
+  const match = typeof value === 'string'
+    ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.exec(value)
+    : null;
+  if (match) {
+    const [, year, month, day, hour, minute, second, zone] = match;
+    const y = Number(year);
+    const m = Number(month);
+    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const validZone = zone === 'Z' || (Number(zone.slice(1, 3)) <= 23 && Number(zone.slice(4, 6)) <= 59);
+    const ms = Date.parse(value as string);
+    if (y >= 1 && m >= 1 && m <= 12 && Number(day) >= 1 && Number(day) <= days[m - 1] &&
+        Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59 &&
+        validZone && Number.isFinite(ms) && ms > Date.now()) {
+      return new Date(ms).toISOString();
+    }
+  }
+  throw new errors.ValidationError('expiresAt must be a valid future ISO timestamp with timezone.');
+}
+
 function parsePublicToken(rawToken: string) {
   const token = String(rawToken || '').trim();
   const [sessionDocumentId, activatedAtMsRaw, signature] = token.split('.');
@@ -202,9 +223,9 @@ async function getSessionByDocumentId(sessionDocumentId: string) {
   });
 }
 
-async function validatePublicSessionToken(rawToken: string) {
+async function validatePublicSessionToken(rawToken: string, lockedSession?: any) {
   const parsed = parsePublicToken(rawToken);
-  const session = await getSessionByDocumentId(parsed.sessionDocumentId);
+  const session = lockedSession ?? await getSessionByDocumentId(parsed.sessionDocumentId);
 
   if (!session?.documentId) {
     throw new errors.NotFoundError('Public UAT session not found.');
@@ -231,15 +252,6 @@ async function validatePublicSessionToken(rawToken: string) {
 
   const now = new Date();
   if (session.expiresAt && new Date(session.expiresAt) < now) {
-    if (session.status === 'active') {
-      await strapi.documents('api::public-uat-session.public-uat-session' as any).update({
-        documentId: session.documentId,
-        data: {
-          status: 'expired',
-        },
-      });
-    }
-
     throw new errors.ForbiddenError('This public UAT session has expired.');
   }
 
@@ -286,14 +298,19 @@ function mapPublicResultItem(result: any) {
 }
 
 function mapSessionStatusResponse(session: any) {
+  const expired = Boolean(session.expiresAt) && !(Date.parse(session.expiresAt) > Date.now());
+  const status = session.status === 'expired' && session.completedAt
+    ? 'completed'
+    : session.status === 'active' && expired ? 'expired' : session.status;
   const token =
-    session.documentId && session.activatedAt && !['revoked', 'expired'].includes(session.status)
+    session.documentId && session.activatedAt && !expired && !session.revokedAt &&
+      ['active', 'completed'].includes(session.status)
       ? buildSessionToken(session.documentId, session.activatedAt)
       : null;
 
   return {
     documentId: session.documentId,
-    status: session.status,
+    status,
     expiresAt: session.expiresAt || null,
     activatedAt: session.activatedAt || null,
     completedAt: session.completedAt || null,
@@ -363,6 +380,52 @@ function mapPublicSessionResponse(session: any) {
         }
       : null,
   };
+}
+
+// Lock in a stable run → session order, then authorize the fresh persisted relations.
+// Strapi's database transaction context automatically enlists document operations.
+async function getLockedSession(trx: any, runId: string) {
+  if (!runId) throw new errors.ValidationError('Test run is required.');
+  const runTable = strapi.db.metadata.get('api::test-run.test-run').tableName;
+  await trx(runTable).where({ document_id: runId }).forUpdate().first();
+  const testRun = await getTestRunForSession(runId);
+  if (!testRun?.documentId || testRun.documentId !== runId ||
+      !testRun.organization?.documentId || !testRun.project?.documentId) {
+    throw new errors.NotFoundError('Test run not found.');
+  }
+  let session = await getSessionByTestRun(runId);
+  if (!session?.documentId) throw new errors.NotFoundError('Public UAT session not found.');
+  const sessionId = session.documentId;
+  const sessionMetadata = strapi.db.metadata.get('api::public-uat-session.public-uat-session');
+  const lockedSession = await trx(sessionMetadata.tableName).where({ document_id: sessionId }).forUpdate().first();
+  session = await getSessionByTestRun(runId);
+  // A locking read is current even when MySQL's document-service read view is older.
+  const updatedAtColumn = (sessionMetadata.attributes.updatedAt as { columnName: string }).columnName;
+  if (!lockedSession || lockedSession.status !== session?.status ||
+      new Date(lockedSession[updatedAtColumn]).getTime() !== new Date(session?.updatedAt).getTime()) {
+    throw new errors.ValidationError('Public UAT session changed. Refresh before trying again.');
+  }
+  const project = await strapi.documents('api::project.project').findOne({
+    documentId: testRun.project.documentId,
+    populate: { organization: true },
+  });
+  if (!session?.documentId || session.documentId !== sessionId ||
+      session.organization?.documentId !== testRun.organization.documentId ||
+      session.project?.documentId !== testRun.project.documentId ||
+      session.testRun?.documentId !== testRun.documentId ||
+      testRun.publicUatSession?.documentId !== session.documentId ||
+      project?.documentId !== testRun.project.documentId ||
+      project?.organization?.documentId !== testRun.organization.documentId) {
+    throw new errors.ForbiddenError('Public UAT session relations do not match this test run.');
+  }
+  if (testRun.testType !== 'uat') throw new errors.ValidationError('Only UAT sessions can be managed.');
+  return { testRun, session };
+}
+
+async function getManagedSession(trx: any, userId: number, runId: string) {
+  const locked = await getLockedSession(trx, runId);
+  await ensureAdminAccessForOrganization(userId, locked.testRun.organization.documentId);
+  return locked;
 }
 
 function hasPendingPublicResults(session: any) {
@@ -494,6 +557,60 @@ export default factories.createCoreController(
           publicUrl: buildPublicSessionUrl(token),
         },
       };
+    },
+
+    async reopen(ctx) {
+      const userId = ctx.state.user?.id;
+      if (!userId) throw new errors.UnauthorizedError('Authentication is required.');
+      const data = await strapi.db.transaction(async ({ trx }) => {
+        const runId = String(ctx.params.documentId || '').trim();
+        const { testRun, session } = await getManagedSession(trx, userId, runId);
+        if (!session.activatedAt || !session.tokenHash || session.revokedAt ||
+            !['active', 'completed', 'expired'].includes(session.status) ||
+            (session.status === 'active' && !session.completionLocked &&
+              (!session.expiresAt || Date.parse(session.expiresAt) > Date.now()))) {
+          throw new errors.ValidationError('This public UAT session cannot be reopened.');
+        }
+        const requestedExpiration = ctx.request.body?.data?.expiresAt;
+        const expiresAt = typeof requestedExpiration !== 'undefined'
+          ? parseFutureExpiration(requestedExpiration)
+          : (session.expiresAt || session.status === 'expired') ? parseFutureExpiration(session.expiresAt) : undefined;
+        await strapi.documents('api::public-uat-session.public-uat-session' as any).update({
+          documentId: session.documentId,
+          data: { status: 'active', completionLocked: false, completedAt: null,
+            ...(expiresAt ? { expiresAt } : {}) },
+        });
+        await strapi.documents('api::test-run.test-run').update({
+          documentId: testRun.documentId,
+          data: { status: 'draft' },
+        });
+        return mapSessionStatusResponse(await getSessionByTestRun(runId));
+      });
+      ctx.body = { data };
+    },
+
+    async expiration(ctx) {
+      const userId = ctx.state.user?.id;
+      if (!userId) throw new errors.UnauthorizedError('Authentication is required.');
+      const data = await strapi.db.transaction(async ({ trx }) => {
+        const runId = String(ctx.params.documentId || '').trim();
+        const { session } = await getManagedSession(trx, userId, runId);
+        if (!session.activatedAt || !session.tokenHash ||
+            !['active', 'completed', 'expired', 'revoked'].includes(session.status)) {
+          throw new errors.ValidationError('Only published public UAT sessions have an editable expiration.');
+        }
+        const expiresAt = parseFutureExpiration(ctx.request.body?.data?.expiresAt);
+        const resumeActive = session.status === 'expired' && !session.completionLocked &&
+          !session.completedAt && !session.revokedAt;
+        const restoreCompleted = session.status === 'expired' && Boolean(session.completedAt) && !session.revokedAt;
+        await strapi.documents('api::public-uat-session.public-uat-session' as any).update({
+          documentId: session.documentId,
+          data: { expiresAt,
+            ...(resumeActive ? { status: 'active' } : restoreCompleted ? { status: 'completed' } : {}) },
+        });
+        return mapSessionStatusResponse(await getSessionByTestRun(runId));
+      });
+      ctx.body = { data };
     },
 
     async status(ctx) {
@@ -665,58 +782,62 @@ export default factories.createCoreController(
         throw new errors.ValidationError('Public UAT token is required.');
       }
 
-      const session = await validatePublicSessionToken(token);
-      if (session.status !== 'active' || session.completionLocked) {
-        throw new errors.ForbiddenError('This public UAT session is already closed.');
-      }
+      // Locate the run, then revalidate token and lifecycle after both row locks.
+      const initialSession = await validatePublicSessionToken(token);
+      const data = await strapi.db.transaction(async ({ trx }) => {
+        const { session: lockedSession } = await getLockedSession(trx, initialSession.testRun?.documentId);
+        const session = await validatePublicSessionToken(token, lockedSession);
+        if (session.status !== 'active' || session.completionLocked) {
+          throw new errors.ForbiddenError('This public UAT session is already closed.');
+        }
 
-      if (hasPendingPublicResults(session)) {
-        throw new errors.ValidationError(
-          'All UAT test cases must have a saved result before completing the public session.',
-        );
-      }
+        if (hasPendingPublicResults(session)) {
+          throw new errors.ValidationError(
+            'All UAT test cases must have a saved result before completing the public session.',
+          );
+        }
 
-      const nowIso = new Date().toISOString();
-      const updatedSession = await strapi.documents('api::public-uat-session.public-uat-session' as any).update({
-        documentId: session.documentId,
-        data: {
-          status: 'completed',
-          completedAt: nowIso,
-          completionLocked: true,
-          lastAccessedAt: nowIso,
-        },
-        populate: {
-          organization: true,
-          project: true,
-          testRun: {
-            populate: {
-              sprint: true,
-              results: {
-                sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
-                populate: {
-                  functionality: { populate: { module: { fields: ['name'] } } },
-                  testCase: true,
-                  bug: true,
+        const nowIso = new Date().toISOString();
+        const updatedSession = await strapi.documents('api::public-uat-session.public-uat-session' as any).update({
+          documentId: session.documentId,
+          data: {
+            status: 'completed',
+            completedAt: nowIso,
+            completionLocked: true,
+            lastAccessedAt: nowIso,
+          },
+          populate: {
+            organization: true,
+            project: true,
+            testRun: {
+              populate: {
+                sprint: true,
+                results: {
+                  sort: [{ orderIndex: 'asc' }, { createdAt: 'asc' }] as any,
+                  populate: {
+                    functionality: { populate: { module: { fields: ['name'] } } },
+                    testCase: true,
+                    bug: true,
+                  },
                 },
               },
             },
+            externalParticipant: true,
           },
-          externalParticipant: true,
-        },
-      });
-
-      if (updatedSession.testRun?.documentId) {
-        await strapi.documents('api::test-run.test-run').update({
-          documentId: updatedSession.testRun.documentId,
-          data: {
-            status: 'final',
-          } as any,
         });
-      }
 
-      ctx.body = {
-        data: mapPublicSessionResponse(updatedSession),
-      };
+        if (updatedSession.testRun?.documentId) {
+          await strapi.documents('api::test-run.test-run').update({
+            documentId: updatedSession.testRun.documentId,
+            data: {
+              status: 'final',
+            } as any,
+          });
+        }
+
+        return mapPublicSessionResponse(await getSessionByDocumentId(session.documentId));
+      });
+      ctx.body = { data };
     },
   }),
 );

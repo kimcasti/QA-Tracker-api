@@ -54,6 +54,8 @@ export const EXPOSED_ACTIONS = [
   'api::external-participant.external-participant.delete',
   'api::public-uat-session.public-uat-session.find',
   'api::public-uat-session.public-uat-session.findOne',
+  'api::public-uat-session.public-uat-session.reopen',
+  'api::public-uat-session.public-uat-session.expiration',
   'api::project.project.find',
   'api::project.project.findOne',
   'api::project.project.create',

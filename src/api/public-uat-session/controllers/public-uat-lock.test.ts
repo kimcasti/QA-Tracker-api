@@ -13,27 +13,48 @@ async function withSession(locked: boolean, action: (f: any) => Promise<void>) {
   const signature = crypto.createHmac('sha256', process.env.PUBLIC_UAT_TOKEN_SECRET).update(base).digest('base64url');
   const token = `${base}.${signature}`;
   const result = { documentId: 'result-lock', result: 'passed' };
+  const organization = { documentId: 'org-lock' };
+  const project = { documentId: 'project-lock', organization };
+  const run = { documentId: 'run-lock', results: [result], organization, project, testType: 'uat',
+    status: 'draft', publicUatSession: { documentId: 'session-lock' } };
   const session = {
     documentId: 'session-lock', activatedAt, status: 'active', completionLocked: locked,
+    organization, project, updatedAt: activatedAt,
     tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
     expiresAt: '2999-01-01T00:00:00.000Z',
     allowResultEditing: true, allowCommentEditing: true, allowEvidenceUpload: true,
-    testRun: { documentId: 'run-lock', results: [result] },
+    testRun: run,
   };
   const writes: any[] = [];
+  const locks: string[] = [];
+  let inTransaction = false;
   const strapi: any = {
     contentType: () => ({ kind: 'collectionType' }),
+    db: {
+      metadata: { get: (uid: string) => ({ tableName: uid, attributes: { updatedAt: { columnName: 'updated_at' } } }) },
+      transaction: async (callback: any) => {
+        inTransaction = true;
+        const trx = (table: string) => ({ where: () => ({ forUpdate: () => ({ first: async () => {
+          locks.push(table);
+          return { status: session.status, updated_at: session.updatedAt };
+        } }) }) });
+        try { return await callback({ trx }); } finally { inTransaction = false; }
+      },
+    },
     documents: (uid: string) => ({
-      findOne: async () => session,
+      findOne: async () => uid === 'api::test-run.test-run' ? run : uid === 'api::project.project' ? project : session,
+      findFirst: async () => session,
       update: async (input: any) => {
-        writes.push({ uid, ...input });
+        writes.push({ uid, ...input, tx: inTransaction });
+        if (uid === 'api::test-run.test-run') { Object.assign(run, input.data); return run; }
+        if (uid === 'api::public-uat-session.public-uat-session') Object.assign(session, input.data);
         return uid === 'api::test-run-result.test-run-result' ? { ...result, ...input.data } : { ...session, ...input.data };
       },
     }),
   };
   (globalThis as any).strapi = strapi;
   try {
-    await action({ controller: createController({ strapi }), writes,
+    await action({ controller: createController({ strapi }), writes, locks,
       ctx: { params: { token, resultDocumentId: result.documentId }, request: { body: { data: { notes: 'An observation' } } }, body: undefined } });
   } finally {
     (globalThis as any).strapi = previousStrapi;
@@ -50,9 +71,10 @@ test('locked active UAT sessions reject result writes before any mutation', asyn
 });
 
 test('locked active UAT sessions cannot be completed again', async () => {
-  await withSession(true, async ({ controller, ctx, writes }) => {
+  await withSession(true, async ({ controller, ctx, writes, locks }) => {
     await assert.rejects(controller.completePublicSession(ctx), { name: 'ForbiddenError', message: 'This public UAT session is already closed.' });
     assert.equal(writes.length, 0);
+    assert.deepEqual(locks, ['api::test-run.test-run', 'api::public-uat-session.public-uat-session']);
   });
 });
 
@@ -66,8 +88,10 @@ test('unlocked active UAT sessions retain valid result editing', async () => {
 });
 
 test('unlocked active UAT sessions complete and finalize the test run', async () => {
-  await withSession(false, async ({ controller, ctx, writes }) => {
+  await withSession(false, async ({ controller, ctx, writes, locks }) => {
     await controller.completePublicSession(ctx);
+    assert.deepEqual(locks, ['api::test-run.test-run', 'api::public-uat-session.public-uat-session']);
+    assert.ok(writes.every((write: any) => write.tx));
     assert.equal(writes.length, 2);
     assert.equal(writes[0].uid, 'api::public-uat-session.public-uat-session');
     assert.equal(writes[0].data.status, 'completed');
