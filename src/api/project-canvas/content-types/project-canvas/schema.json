@@ -3,6 +3,9 @@
   "collectionName": "project_canvases",
   "info": { "singularName": "project-canvas", "pluralName": "project-canvases", "displayName": "Project Canvas" },
   "options": { "draftAndPublish": false },
+  "indexes": [
+    { "name": "project_canvases_project_key_unique", "columns": ["project_key"], "type": "unique" }
+  ],
   "pluginOptions": { "content-manager": { "visible": false }, "content-type-builder": { "visible": false } },
   "attributes": {
     "projectKey": { "type": "string", "required": true, "unique": true },
