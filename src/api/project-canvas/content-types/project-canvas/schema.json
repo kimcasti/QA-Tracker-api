@@ -1,0 +1,14 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_canvases",
+  "info": { "singularName": "project-canvas", "pluralName": "project-canvases", "displayName": "Project Canvas" },
+  "options": { "draftAndPublish": false },
+  "pluginOptions": { "content-manager": { "visible": false }, "content-type-builder": { "visible": false } },
+  "attributes": {
+    "projectKey": { "type": "string", "required": true, "unique": true },
+    "project": { "type": "relation", "relation": "manyToOne", "target": "api::project.project", "required": true },
+    "organization": { "type": "relation", "relation": "manyToOne", "target": "api::organization.organization", "required": true },
+    "revision": { "type": "integer", "required": true, "min": 1, "max": 2147483647 },
+    "state": { "type": "json", "required": true }
+  }
+}

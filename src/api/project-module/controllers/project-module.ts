@@ -10,16 +10,24 @@ import {
 
 type ProjectModulePayload = {
   name?: string;
-  description?: string;
+  description?: string | null;
   organization?: unknown;
   project?: unknown;
 };
 
-function normalizeProjectModuleData(payload: ProjectModulePayload) {
-  return {
+function normalizeProjectModuleData(payload: ProjectModulePayload): { name: string; description: string };
+function normalizeProjectModuleData(payload: ProjectModulePayload, partial: true): Partial<Pick<ProjectModulePayload, 'name' | 'description'>>;
+function normalizeProjectModuleData(payload: ProjectModulePayload, partial = false) {
+  const data: Record<string, unknown> = {
     name: payload.name || '',
-    description: payload.description || '',
+    description: partial && payload.description === null ? null : payload.description || '',
   };
+  if (partial) {
+    for (const key of Object.keys(data)) {
+      if (!Object.prototype.hasOwnProperty.call(payload, key)) delete data[key];
+    }
+  }
+  return data;
 }
 
 function extractRelationDocumentId(rawValue: unknown): string | null {
@@ -142,9 +150,9 @@ export default factories.createCoreController('api::project-module.project-modul
     const updated = await strapi.documents('api::project-module.project-module').update({
       documentId,
       data: {
-        ...normalizeProjectModuleData(payload),
-        organization: organizationDocumentId,
-        project: projectDocumentId,
+        ...normalizeProjectModuleData(payload, true),
+        ...(Object.prototype.hasOwnProperty.call(payload, 'organization') ? { organization: organizationDocumentId } : {}),
+        ...(Object.prototype.hasOwnProperty.call(payload, 'project') ? { project: projectDocumentId } : {}),
       },
       populate: {
         organization: true,

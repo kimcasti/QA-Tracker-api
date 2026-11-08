@@ -46,6 +46,8 @@ export const JIRA_ACTIONS = ['status', 'projects', 'types', 'configure', 'create
 
 export const EXPOSED_ACTIONS = [
   ...JIRA_ACTIONS,
+  'api::project-canvas.project-canvas.find',
+  'api::project-canvas.project-canvas.update',
   'api::participant-directory.participant-directory.members',
   'api::external-participant.external-participant.find',
   'api::external-participant.external-participant.findOne',

@@ -21,10 +21,10 @@ type FunctionalityPayload = {
   isSmoke?: boolean;
   lastFunctionalChangeAt?: string | null;
   deliveryDate?: string | null;
-  status?: 'completed' | 'failed' | 'in_progress' | 'backlog' | 'mvp' | 'post_mvp';
-  priority?: 'critical' | 'high' | 'medium' | 'low';
-  impactLevel?: 'high' | 'medium' | 'low';
-  probabilityLevel?: 'high' | 'medium' | 'low';
+  status?: 'completed' | 'failed' | 'in_progress' | 'backlog' | 'mvp' | 'post_mvp' | null;
+  priority?: 'critical' | 'high' | 'medium' | 'low' | null;
+  impactLevel?: 'high' | 'medium' | 'low' | null;
+  probabilityLevel?: 'high' | 'medium' | 'low' | null;
   storyLegacyId?: string | null;
   sortOrder?: number | null;
   organization?: unknown;
@@ -122,7 +122,7 @@ function normalizeManyRelation(rawValue: unknown) {
   return null;
 }
 
-function buildFunctionalityData(payload: FunctionalityPayload) {
+function buildFunctionalityData(payload: FunctionalityPayload, partial = false) {
   const data: Record<string, unknown> = {
     code: payload.code || '',
     name: payload.name || '',
@@ -135,15 +135,17 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
     isSmoke: Boolean(payload.isSmoke),
     lastFunctionalChangeAt: payload.lastFunctionalChangeAt || null,
     deliveryDate: payload.deliveryDate || null,
-    status: payload.status || 'backlog',
-    priority: payload.priority || 'medium',
-    impactLevel: payload.impactLevel || 'medium',
-    probabilityLevel: payload.probabilityLevel || 'medium',
+    status: payload.status === null ? null : payload.status || 'backlog',
+    priority: payload.priority === null ? null : payload.priority || 'medium',
+    impactLevel: payload.impactLevel === null ? null : payload.impactLevel || 'medium',
+    probabilityLevel: payload.probabilityLevel === null ? null : payload.probabilityLevel || 'medium',
     storyLegacyId: payload.storyLegacyId || null,
     sortOrder:
-      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
-        ? payload.sortOrder
-        : 0,
+      partial && payload.sortOrder === null
+        ? null
+        : typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+          ? payload.sortOrder
+          : 0,
   };
 
   if (hasOwnProperty(payload, 'module')) {
@@ -160,6 +162,13 @@ function buildFunctionalityData(payload: FunctionalityPayload) {
 
   if (hasOwnProperty(payload, 'personaRoles')) {
     data.personaRoles = normalizeManyRelation(payload.personaRoles) ?? { disconnect: [] };
+  }
+
+  // Create retains its historic defaults; updates must remain a sparse patch.
+  if (partial) {
+    for (const key of Object.keys(data)) {
+      if (!hasOwnProperty(payload, key)) delete data[key];
+    }
   }
 
   return data;
@@ -452,9 +461,12 @@ export function createFunctionalityController(input: CreateFunctionalityControll
     const updated = await input.strapi.documents('api::functionality.functionality').update({
       documentId,
       data: {
-        ...buildFunctionalityData({ ...payload, code: functionalityCode }),
-        organization: organizationDocumentId,
-        project: projectDocumentId,
+        ...buildFunctionalityData({
+          ...payload,
+          ...(hasOwnProperty(payload, 'code') ? { code: functionalityCode } : {}),
+        }, true),
+        ...(hasOwnProperty(payload, 'organization') ? { organization: organizationDocumentId } : {}),
+        ...(hasOwnProperty(payload, 'project') ? { project: projectDocumentId } : {}),
       } as any,
       populate: responsePopulate as any,
     });
