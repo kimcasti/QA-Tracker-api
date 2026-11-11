@@ -1,5 +1,10 @@
 export default {
   routes: [
+    ...(['GET', 'POST'] as const).map(method => ({
+      method, path: '/ai/project/wireframes',
+      handler: method === 'GET' ? 'ai.listProjectWireframes' : 'ai.generateProjectWireframe',
+      config: { auth: {}, policies: ['global::has-active-membership'] },
+    })),
     {
       method: 'POST',
       path: '/ai/execution-evidence/interpret',

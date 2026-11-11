@@ -176,6 +176,8 @@ export const EXPOSED_ACTIONS = [
   'api::ai.ai.analyzeQaStrategyCandidates',
   'api::ai.ai.analyzeProject',
   'api::ai.ai.generateProjectWireframeBrief',
+  'api::ai.ai.listProjectWireframes',
+  'api::ai.ai.generateProjectWireframe',
   'api::ai.ai.generateDeliveryUnitSummary',
   'api::ai.ai.analyzeTechnicalReport',
   'api::plan-access.plan-access.authorizeAi',

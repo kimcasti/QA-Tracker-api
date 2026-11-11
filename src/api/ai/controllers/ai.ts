@@ -1,4 +1,5 @@
 import { errors } from '@strapi/utils';
+import { normalizeWireframeBriefInput } from '../services/wireframe-prompt';
 
 type ProjectInsightInput = {
   name: string;
@@ -118,6 +119,14 @@ function requireProjectId(data: Record<string, any>) {
 }
 
 export default {
+  async listProjectWireframes(ctx) {
+    const userId = requireUserId(ctx);
+    ctx.body = { data: await strapi.service('api::ai.wireframes' as any).list(userId, ctx.query?.projectId) };
+  },
+  async generateProjectWireframe(ctx) {
+    const userId = requireUserId(ctx);
+    ctx.body = { data: await strapi.service('api::ai.wireframes' as any).generate(userId, getData(ctx)) };
+  },
   async interpretExecutionEvidence(ctx) {
     const userId = requireUserId(ctx);
     const data = getData(ctx);
@@ -266,19 +275,7 @@ export default {
     const data = getData(ctx);
     const projectId = requireProjectId(data);
 
-    const input = {
-      name: String(data.name || '').trim(),
-      description: data.description ? String(data.description) : undefined,
-      purpose: data.purpose ? String(data.purpose) : undefined,
-      coreRequirements: Array.isArray(data.coreRequirements)
-        ? data.coreRequirements.map((item: unknown) => String(item))
-        : [],
-      businessRules: data.businessRules ? String(data.businessRules) : undefined,
-    } satisfies ProjectInsightInput;
-
-    if (!input.name) {
-      throw new errors.ValidationError('Project name is required.');
-    }
+    const input = normalizeWireframeBriefInput(data);
 
     const result = await strapi.service('api::ai.ai').generateProjectWireframeBrief(userId, {
       projectId,

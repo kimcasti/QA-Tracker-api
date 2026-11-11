@@ -1,0 +1,89 @@
+{
+  "kind": "collectionType",
+  "collectionName": "stitch_wireframes",
+  "info": {
+    "singularName": "stitch-wireframe",
+    "pluralName": "stitch-wireframes",
+    "displayName": "Private Stitch Wireframe"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": false
+    },
+    "content-type-builder": {
+      "visible": false
+    }
+  },
+  "indexes": [
+    {
+      "name": "stitch_wireframe_request_unique",
+      "columns": [
+        "organization_key",
+        "project_key",
+        "request_key"
+      ],
+      "type": "unique"
+    },
+    {
+      "name": "stitch_wireframe_active_unique",
+      "columns": [
+        "active_key"
+      ],
+      "type": "unique"
+    }
+  ],
+  "attributes": {
+    "projectKey": {
+      "type": "string",
+      "private": true,
+      "required": true
+    },
+    "organizationKey": {
+      "type": "string",
+      "private": true,
+      "required": true
+    },
+    "requestKey": {
+      "type": "string",
+      "private": true,
+      "required": true
+    },
+    "ownerRun": {
+      "type": "string",
+      "private": true,
+      "required": true
+    },
+    "activeKey": {
+      "type": "string",
+      "private": true
+    },
+    "startedAt": {
+      "type": "datetime",
+      "required": true,
+      "private": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "generating",
+        "completed",
+        "partial",
+        "error",
+        "uncertain"
+      ],
+      "required": true,
+      "private": true
+    },
+    "metadata": {
+      "type": "json",
+      "private": true
+    },
+    "imageDataUrl": {
+      "type": "text",
+      "private": true
+    }
+  }
+}

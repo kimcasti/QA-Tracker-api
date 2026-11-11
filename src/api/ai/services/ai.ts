@@ -1,4 +1,6 @@
 import { errors } from '@strapi/utils';
+import { buildWireframeBriefPrompt, normalizeWireframeBriefInput, type WireframeBriefInput } from './wireframe-prompt';
+import { authorizeWireframeProject } from './wireframe-scope';
 import { normalizeGeminiError } from '../../../utils/ai-provider-errors';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
@@ -1457,62 +1459,14 @@ Responde solo con Markdown.`;
 
   async generateProjectWireframeBrief(
     userId: number,
-    payload: { projectId: string; input: ProjectInsightInput },
+    payload: { projectId: string; input: WireframeBriefInput },
   ) {
-    const input = payload.input;
-    const coreRequirements = (input.coreRequirements || []).join('\n') || 'No definidos';
-    const businessRules = input.businessRules || 'No definidas';
-    const description = input.description || 'No definida';
-    const purpose = input.purpose || 'No definido';
-
-    const prompt = `Act as a senior product designer and UX strategist.
-Using the real project information below, generate a reusable wireframe brief in Markdown.
-The result must keep a structure similar to a multi-screen low-fidelity wireframe request, but it must adapt to the actual project context instead of forcing generic screens.
-
-Project context:
-- Project name: ${input.name}
-- General description: ${description}
-- Project goal: ${purpose}
-- Core requirements:
-${coreRequirements}
-- Business rules:
-${businessRules}
-
-Return the answer in Spanish, but keep the final block "Wireframe prompt listo para pegar" written in English so it can be pasted directly into Stitch or a similar wireframing tool.
-
-Necesito una respuesta en Markdown con estas secciones exactas:
-## Objetivo del wireframe
-## Usuarios principales
-## Escenas principales sugeridas
-## Contenido clave por escena
-## Componentes sugeridos
-## Flujo recomendado entre escenas
-## Consideraciones de negocio
-## Wireframe prompt listo para pegar
-
-Reglas:
-- Propone entre 4 y 7 escenas principales.
-- Las escenas deben ser sencillas, editables y pensadas para una primera versión.
-- No fuerces módulos que no tengan relación con el proyecto.
-- Deduce las pantallas más relevantes según descripción, objetivo, requisitos y normas empresariales.
-- Prioriza estructura, layout, jerarquía de información y flujo de usuario.
-- Evita sobrecargar cada escena con demasiados widgets, KPIs o formularios.
-- En "Escenas principales sugeridas" incluye para cada escena: nombre, objetivo y acciones principales.
-- En "Contenido clave por escena" indica los bloques o datos que deberia tener cada pantalla.
-- En "Flujo recomendado entre escenas" explica como se conectan las pantallas principales.
-- Si falta contexto, completa con supuestos razonables, pero sin inventar integraciones muy específicas.
-
-Reglas específicas para "Wireframe prompt listo para pegar":
-- Debe parecerse estructuralmente a un prompt de multi-screen low-fidelity wireframe set.
-- Debe pedir varias escenas principales sencillas, no una sola pantalla compleja.
-- Debe mencionar explicitamente el nombre real del proyecto.
-- Debe incorporar el contexto del proyecto y adaptar las pantallas al dominio detectado.
-- Debe pedir low-fidelity wireframes, grayscale, sketch-style or rough SaaS wireframe.
-- Debe pedir simple boxes, placeholders, labels y una composicion clara.
-- Debe indicar que solo incluya las opciones más relevantes para luego seguir editando.
-- Debe cerrar con un goal similar a: continue refining the product structure and make UI adjustments later.
-
-Responde solo con Markdown.`;
+    const project = await authorizeWireframeProject(strapi, userId, payload.projectId, true);
+    const input = normalizeWireframeBriefInput(payload.input);
+    if (project.aiProjectInsights != null && (typeof project.aiProjectInsights !== 'string' || project.aiProjectInsights.length > 20000)) {
+      throw new errors.ValidationError('Invalid persisted project analysis.');
+    }
+    const prompt = buildWireframeBriefPrompt(input, project.aiProjectInsights || 'Sin analisis persistido');
 
     return runAiAction(userId, payload.projectId, () =>
       withAiFallback(
