@@ -5,7 +5,7 @@ import { normalizeGeminiError } from '../../../utils/ai-provider-errors';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
-const AI_PROVIDER_TIMEOUT_MS = 15_000;
+const AI_PROVIDER_TIMEOUT_MS = 60_000;
 
 type ProjectInsightInput = {
   name: string;
@@ -195,6 +195,7 @@ function shouldFallbackToGroq(error: unknown) {
     .toLowerCase();
 
   return (
+    message === 'ai_provider_timeout' ||
     code === 429 ||
     code === 404 ||
     code === 503 ||
