@@ -1462,11 +1462,11 @@ Responde solo con Markdown.`;
     payload: { projectId: string; input: WireframeBriefInput },
   ) {
     const project = await authorizeWireframeProject(strapi, userId, payload.projectId, true);
-    const input = normalizeWireframeBriefInput(payload.input);
+    const input = normalizeWireframeBriefInput({ name: project.name, description: project.description ?? undefined, purpose: project.purpose ?? undefined, coreRequirements: project.coreRequirements ?? [], businessRules: project.businessRules ?? undefined });
     if (project.aiProjectInsights != null && (typeof project.aiProjectInsights !== 'string' || project.aiProjectInsights.length > 20000)) {
       throw new errors.ValidationError('Invalid persisted project analysis.');
     }
-    const prompt = buildWireframeBriefPrompt(input, project.aiProjectInsights || 'Sin analisis persistido');
+    const prompt = buildWireframeBriefPrompt(input, project.aiProjectInsights || undefined);
 
     return runAiAction(userId, payload.projectId, () =>
       withAiFallback(

@@ -4,9 +4,9 @@
 
 En **Acerca de → Insights con IA y brief de wireframe**:
 
-1. Generar el análisis del proyecto.
-2. Revisar sus conclusiones. Escribir una por línea en **Conclusiones del análisis confirmadas por ti** solo si están aprobadas (máximo 20; 1000 caracteres cada una; 8000 en total).
-3. Generar el brief. El servidor obtiene el análisis guardado y lo etiqueta como no confirmado; las hipótesis y preguntas no se convierten automáticamente en requisitos aprobados. Ambos proveedores de texto reciben la política lo-fi.
+1. Opcionalmente generar el análisis de IA como apoyo; no es un requisito previo para el brief.
+2. Completar o revisar la información de **Acerca de**: descripción, objetivo, requisitos básicos y normas empresariales. No hay un campo de confirmación manual del análisis.
+3. Generar el brief. El servidor lee la información guardada del proyecto autorizado como fuente principal y usa el análisis de IA, si existe, como apoyo. También puede generar el brief sin análisis previo; los supuestos permanecen identificados como tales. Ambos proveedores reciben la política lo-fi y los mismos criterios de UI/UX.
 4. Revisar el brief y pulsar **Generar flujo lo-fi**. Confirmar el envío a Stitch únicamente si no contiene secretos o información confidencial.
 5. Consultar el recorrido propuesto del brief y el conjunto ordenado de pantallas en una versión de la galería, ampliar sus imágenes o usar **Abrir en Stitch**. Las versiones anteriores se conservan.
 
@@ -67,7 +67,7 @@ La regresión de navegador cubre versiones históricas de una pantalla, generaci
 
 El brief y la instrucción directa a Stitch comparten la misma política: objetivo/actor, entrada → tarea principal → revisión o confirmación pertinente → resultado; navegación y componentes consistentes; jerarquía clara y una acción primaria por contexto; campos mínimos y divulgación progresiva. Se piden etiquetas persistentes, ayuda, requerido/opcional, validación inline y resumen de errores accionable, volver/cancelar sin pérdida de datos y revisión antes de envíos irreversibles/destructivos cuando corresponda. Los estados vacío/cargando/error/éxito se representan donde aporten valor, no como pantallas obligatorias separadas.
 
-Se solicitan anotaciones de teclado, foco lógico/visible y contraste suficiente en grises; interfaz en español, bordes finos y controles básicos sin color de marca ni acabado visual pulido. Sin patrones oscuros ni integraciones inventadas. Solo las conclusiones explícitamente confirmadas son aprobadas; el resto sigue como supuestos/preguntas. Estas instrucciones no certifican WCAG ni garantizan calidad visual; la revisión humana del flujo sigue siendo necesaria.
+Se solicitan anotaciones de teclado, foco lógico/visible y contraste suficiente en grises; interfaz en español, bordes finos y controles básicos sin color de marca ni acabado visual pulido. Sin patrones oscuros ni integraciones inventadas. Los datos aportados por el cliente guían el flujo; el análisis de IA no los sustituye ni inventa aprobaciones. Estas instrucciones no certifican WCAG ni garantizan calidad visual; la revisión humana del flujo sigue siendo necesaria.
 
 Referencias de diseño (adaptar al dominio; no son una solución universal):
 - W3C WAI, formularios: https://www.w3.org/WAI/tutorials/forms/

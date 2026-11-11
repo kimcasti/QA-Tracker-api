@@ -1,25 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('brief rejects malformed or unbounded reviewed input instead of coercing approval', async () => {
+test('brief validates project context and ignores obsolete approval fields', async () => {
   const module = await import('./wireframe-prompt');
   assert.equal(typeof module.normalizeWireframeBriefInput, 'function');
-  for (const value of [null, [], {name:''}, {name:7}, {name:'x',confirmedConclusions:'yes'}, {name:'x',confirmedConclusions:[7]}, {name:'x',confirmedConclusions:[' ']}, {name:'x',confirmedConclusions:Array(21).fill('x')}, {name:'x',aiProjectInsights:'x'.repeat(20001)}, {name:'x',coreRequirements:['x'.repeat(1001)]}]) {
+  for (const value of [null, [], {name:''}, {name:7}, {name:'x',coreRequirements:'yes'}, {name:'x',coreRequirements:[7]}, {name:'x',coreRequirements:[' ']}, {name:'x',businessRules:'x'.repeat(12001)}, {name:'x',coreRequirements:['x'.repeat(1001)]}]) {
     assert.throws(() => module.normalizeWireframeBriefInput(value), /Invalid wireframe/);
   }
-  assert.deepEqual(module.normalizeWireframeBriefInput({name:' x ',confirmedConclusions:[' reviewed ']}), {name:'x',confirmedConclusions:['reviewed'],coreRequirements:[]});
+  assert.deepEqual(module.normalizeWireframeBriefInput({name:' x ',confirmedConclusions:['obsolete'],aiProjectInsights:'client analysis'}), {name:'x',coreRequirements:[]});
 });
 
-test('brief separates explicitly reviewed conclusions from unconfirmed analysis and mandates lo-fi', async () => {
+test('project information is primary and optional analysis is support, without manual approval', async () => {
   const module = await import('./wireframe-prompt').catch(() => null);
   assert.ok(module?.buildWireframeBriefPrompt, 'brief prompt builder must exist');
-  const prompt = module.buildWireframeBriefPrompt({ name: 'Reserva', confirmedConclusions: ['La reserva necesita aprobación'], aiProjectInsights: 'Quizá pagos' }, 'Análisis persistido no revisado');
-  assert.match(prompt, /CONFIRMADAS[\s\S]*La reserva necesita aprobación/);
-  assert.match(prompt, /NO CONFIRMADO[\s\S]*Análisis persistido no revisado/);
-  assert.doesNotMatch(prompt, /Quizá pagos|rough SaaS/);
+  const prompt = module.buildWireframeBriefPrompt({ name: 'Reserva', purpose:'Gestionar reservas', coreRequirements:['Buscar disponibilidad'], businessRules:'Sin solapamientos' }, 'Análisis persistido de apoyo');
+  assert.match(prompt, /FUENTE PRINCIPAL[\s\S]*Buscar disponibilidad[\s\S]*Sin solapamientos/);
+  assert.match(prompt, /ANÁLISIS DE APOYO[\s\S]*Análisis persistido de apoyo/);
+  assert.doesNotMatch(prompt, /CONCLUSIONES CONFIRMADAS|persona revisora|rough SaaS/);
   assert.match(prompt, /## Supuestos y preguntas pendientes/);
   assert.match(prompt, /LOFI OBLIGATORIO/);
   assert.match(prompt, /no colors, no gradients, no photography/);
+  assert.match(module.buildWireframeBriefPrompt({name:'Reserva'}), /No hay análisis previo/);
 });
 
 
