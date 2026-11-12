@@ -6,7 +6,7 @@ export default factories.createCoreRouter('api::bug.bug', {
     find: {
       policies: [
         {
-          name: 'global::tenant-access',
+          name: 'api::bug.read-access',
           config: { contentTypeUid: 'api::bug.bug', allowedRoles: READ_ROLES },
         },
       ],

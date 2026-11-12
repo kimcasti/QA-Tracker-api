@@ -230,20 +230,29 @@ const summaryPopulate = {
   },
 };
 
-export default factories.createCoreController('api::bug.bug', () => ({
-  async listSummary(ctx) {
-    await tenantAccess(ctx, { contentTypeUid: 'api::bug.bug', allowedRoles: READ_ROLES }, { strapi });
-    await this.validateQuery(ctx);
-    const sanitizedQuery = await this.sanitizeQuery(ctx);
-    const query = {
-      ...sanitizedQuery,
-      fields: summaryFields,
-      populate: summaryPopulate,
-    };
+async function findScopedBugs(controller: any, ctx: any, summary = false) {
+  await controller.validateQuery(ctx);
+  const sanitizedQuery = await controller.sanitizeQuery(ctx);
+  // Client relation permissions must not reject or strip our mandatory tenant
+  // scope. Validate client input first, then intersect the trusted scope last.
+  const scopedContext = { ...ctx, query: sanitizedQuery };
+  await tenantAccess(scopedContext, { contentTypeUid: 'api::bug.bug', allowedRoles: READ_ROLES }, { strapi });
+  const query = {
+    ...scopedContext.query,
+    ...(summary ? { fields: summaryFields, populate: summaryPopulate } : {}),
+  };
+  const { results, pagination } = await strapi.service('api::bug.bug').find(query);
+  const sanitizedResults = await controller.sanitizeOutput(results, ctx);
+  return controller.transformResponse(sanitizedResults, { pagination });
+}
 
-    const { results, pagination } = await strapi.service('api::bug.bug').find(query);
-    const sanitizedResults = await this.sanitizeOutput(results, ctx);
-    return this.transformResponse(sanitizedResults, { pagination });
+export default factories.createCoreController('api::bug.bug', () => ({
+  async find(ctx) {
+    return findScopedBugs(this, ctx);
+  },
+
+  async listSummary(ctx) {
+    return findScopedBugs(this, ctx, true);
   },
 
   async create(ctx) {
